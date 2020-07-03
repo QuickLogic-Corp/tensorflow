@@ -3,11 +3,11 @@ OUTPUT_FORMAT ("elf32-littlearm", "elf32-bigarm", "elf32-littlearm")
 ENTRY(Reset_Handler)
 MEMORY
 {
-	rom (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00027000
-	ram (rwx) : ORIGIN = 0x20027000, LENGTH = 0x0003c800
-	spiram (rw) : ORIGIN = 0x20063800, LENGTH = 0x0000800
-	HWA (rw)  : ORIGIN = 0x20064000, LENGTH = 0x00018000
-	shm       : ORIGIN = 0x2007C000, LENGTH = 0x00004000
+	rom (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00060400
+	ram (rwx) : ORIGIN = 0x20060400, LENGTH = 0x0001FBD0
+	spiram (rw) : ORIGIN = 0x2007FFD0, LENGTH = 0x00000008
+	HWA (rw)  : ORIGIN = 0x2007FFE0, LENGTH = 0x00000008
+	shm       : ORIGIN = 0x2007FFF0, LENGTH = 0x00000008
 }
 
 SECTIONS
@@ -60,7 +60,7 @@ SECTIONS
 	{
 		__data_start__ = .;
 
-		/* _sdata is used in coide startup code */
+		/* _sdata is used in code startup code */
 		_sdata = __data_start__;
 
 		*(vtable)
@@ -157,7 +157,7 @@ SECTIONS
 
 	/* Set stack top to end of ram , and stack limit move down by
 	* size of stack_dummy section */
-	STACK_SIZE = 3K;
+	STACK_SIZE = 0x280;
 	__StackTop = ORIGIN(ram ) + LENGTH(ram );
 	__StackLimit = __StackTop - STACK_SIZE;
 	PROVIDE(__stack = __StackTop);
