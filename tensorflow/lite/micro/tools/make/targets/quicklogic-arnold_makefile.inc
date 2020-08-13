@@ -4,9 +4,6 @@ ifeq ($(TARGET), quicklogic-arnold)
   TARGET_TOOLCHAIN_ROOT := /opt/riscv/bin/
   TARGET_TOOLCHAIN_PREFIX := riscv32-unknown-elf-
 
-  #$(eval $(call add_third_party_download,$(RISCV_TOOLCHAIN_URL),$(RISCV_TOOLCHAIN_MD5),riscv_toolchain,))
-  #$(eval $(call add_third_party_download,$(SIFIVE_FE310_LIB_URL),$(SIFIVE_FE310_LIB_MD5),sifive_fe310_lib,))
-
   PLATFORM_FLAGS = \
     -mfdiv -D__riscv__\
 	  -O3\
@@ -15,13 +12,16 @@ ifeq ($(TARGET), quicklogic-arnold)
 	  -MMD\
 	  -MP
 
-  CXXFLAGS += $(PLATFORM_FLAGS) \
-	-DTF_LITE_USE_GLOBAL_CMATH_FUNCTIONS\
-	-DTF_LITE_USE_GLOBAL_MAX\
-	-DTF_LITE_USE_GLOBAL_MIN\
-    -fpermissive \
-    -fno-rtti \
-    --std=gnu++11
+  CXXFLAGS += $(PLATFORM_FLAGS)
+  CXXFLAGS += -DTF_LITE_MCU_DEBUG_LOG#							 Use this when platform does not have "standard IO fucntions"
+#  CXXFLAGS += -DTF_LITE_STRIP_ERROR_STRINGS
+  CXXFLAGS += -DTF_LITE_USE_GLOBAL_CMATH_FUNCTIONS
+  CXXFLAGS += -DTF_LITE_USE_GLOBAL_MAX
+  CXXFLAGS += -DTF_LITE_USE_GLOBAL_MIN
+  CXXFLAGS += -fpermissive
+  CXXFLAGS += -fno-rtti
+  CXXFLAGS += -fno-exceptions
+  CXXFLAGS += --std=gnu++11
 
   CCFLAGS += $(PLATFORM_FLAGS)
 
@@ -50,6 +50,7 @@ ifeq ($(TARGET), quicklogic-arnold)
 	-lrtio\
 	-lrt\
 	-lgcc
+#LDFLAGS += -lstdc++
 
 # These are microcontroller-specific rules for converting the ELF output
 # of the linker into a binary image that can be loaded directly.
