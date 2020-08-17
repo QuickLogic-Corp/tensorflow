@@ -4,13 +4,13 @@ ifeq ($(TARGET), quicklogic-arnold)
   TARGET_TOOLCHAIN_ROOT := /opt/riscv/bin/
   TARGET_TOOLCHAIN_PREFIX := riscv32-unknown-elf-
 
-  PLATFORM_FLAGS = \
-    -mfdiv -D__riscv__\
-	  -O3\
-	  -fdata-sections\
-	  -ffunction-sections\
-	  -MMD\
-	  -MP
+  PLATFORM_FLAGS = -D__riscv__
+  PLATFORM_FLAGS += -mfdiv
+#  PLATFORM_FLAGS += -O3
+  PLATFORM_FLAGS += -fdata-sections
+  PLATFORM_FLAGS += -ffunction-sections
+  PLATFORM_FLAGS += -MMD
+  PLATFORM_FLAGS += -MP
 
   CXXFLAGS += $(PLATFORM_FLAGS)
   CXXFLAGS += -DTF_LITE_MCU_DEBUG_LOG#							 Use this when platform does not have "standard IO fucntions"
@@ -22,7 +22,7 @@ ifeq ($(TARGET), quicklogic-arnold)
   CXXFLAGS += -fno-rtti
   CXXFLAGS += -fno-exceptions
   CXXFLAGS += --std=gnu++11
-
+  
   CCFLAGS += $(PLATFORM_FLAGS)
 
   BUILD_TYPE := micro
@@ -43,7 +43,7 @@ ifeq ($(TARGET), quicklogic-arnold)
 	-nostdlib\
 	-Wl,--gc-sections\
 	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/rules\
-	-Tarnold/link.ld\
+	-Ttf-arnold/tensorflow/lite/micro/tools/targets/arnold/arnold.ld\
 	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/lib/arnold\
 	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/lib/arnold/arnold\
 	-lrt\
@@ -51,6 +51,7 @@ ifeq ($(TARGET), quicklogic-arnold)
 	-lrt\
 	-lgcc
 #LDFLAGS += -lstdc++
+
 
 # These are microcontroller-specific rules for converting the ELF output
 # of the linker into a binary image that can be loaded directly.
