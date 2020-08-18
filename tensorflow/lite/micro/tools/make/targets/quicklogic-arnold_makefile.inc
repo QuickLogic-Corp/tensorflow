@@ -43,7 +43,7 @@ ifeq ($(TARGET), quicklogic-arnold)
 	-nostdlib\
 	-Wl,--gc-sections\
 	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/rules\
-	-Ttf-arnold/tensorflow/lite/micro/tools/targets/arnold/arnold.ld\
+	-T../../../../../targets/quicklogic-arnold/arnold.ld\
 	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/lib/arnold\
 	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/lib/arnold/arnold\
 	-lrt\
