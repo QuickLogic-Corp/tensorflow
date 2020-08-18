@@ -29,7 +29,7 @@ limitations under the License.
 
 // Create an area of memory to use for input, output, and intermediate arrays.
 constexpr int tensor_arena_size = 93 * 1024;
-uint8_t tensor_arena[tensor_arena_size];
+uint8_t tensor_arena[tensor_arena_size] __attribute__ ((aligned (16)));
 
 TF_LITE_MICRO_TESTS_BEGIN
 
