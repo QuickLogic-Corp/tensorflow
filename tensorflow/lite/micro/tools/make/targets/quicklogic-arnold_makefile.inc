@@ -3,8 +3,10 @@ ifeq ($(TARGET), quicklogic-arnold)
   TARGET_ARCH := rv32imfcxpulpv2
   TARGET_TOOLCHAIN_ROOT := /opt/riscv/bin/
   TARGET_TOOLCHAIN_PREFIX := riscv32-unknown-elf-
+	
+	PULP_BUILDER = /home/gmartin/ETH/TRY5/arnold/pulp-builder
 
-  PLATFORM_FLAGS = -D__riscv__
+  PLATFORM_FLAGS = -D__riscv__z
   PLATFORM_FLAGS += -mfdiv
 #  PLATFORM_FLAGS += -O3
   PLATFORM_FLAGS += -fdata-sections
@@ -22,13 +24,21 @@ ifeq ($(TARGET), quicklogic-arnold)
   CXXFLAGS += -fno-rtti
   CXXFLAGS += -fno-exceptions
   CXXFLAGS += --std=gnu++11
+  CXXFLAGS += -Itensorflow/lite/micro/quicklogic-arnold
   
   CCFLAGS += $(PLATFORM_FLAGS)
 
   BUILD_TYPE := micro
 
   INCLUDES += \
+	-I/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/include/io \
+	-I/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/include \
+	-include /home/gmartin/ETH/TRY5/arnold/pulp-builder/pulp-rt-examples/arnold_tests/gpio_toggle/build/arnold/fc_config.h
+	#-I${PULP_BUILDER}/hal/include/
+	#-I${PULP_BUILDER}/archi/include/
 
+  SRCS += tensorflow/lite/micro/quicklogic-arnold/fll.cc
+  SRCS += tensorflow/lite/micro/quicklogic-arnold/gpio.cc
 
   MICROLITE_CC_SRCS += 
 
@@ -42,10 +52,10 @@ ifeq ($(TARGET), quicklogic-arnold)
 	-nostartfiles\
 	-nostdlib\
 	-Wl,--gc-sections\
-	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/rules\
+	-L${PULP_BUILDER}/install/rules\
 	-T../../../../../targets/quicklogic-arnold/arnold.ld\
-	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/lib/arnold\
-	-L/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/lib/arnold/arnold\
+	-L${PULP_BUILDER}/install/lib/arnold\
+	-L${PULP_BUILDER}/install/lib/arnold/arnold\
 	-lrt\
 	-lrtio\
 	-lrt\
