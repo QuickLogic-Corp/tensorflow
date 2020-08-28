@@ -40,7 +40,7 @@ ifeq ($(TARGET), quicklogic-arnold)
   SRCS += tensorflow/lite/micro/quicklogic-arnold/fll.cc
   SRCS += tensorflow/lite/micro/quicklogic-arnold/gpio.cc
 
-  MICROLITE_CC_SRCS += 
+  MICROLITE_CC_SRCS += $(SRCS)
 
   MICRO_SPEECH_TEST_SRCS += 
 
