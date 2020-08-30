@@ -173,7 +173,7 @@ void EvalQuantized(TfLiteContext* context, TfLiteNode* node,
                    const TfLiteTensor* input, const TfLiteTensor* filter,
                    const TfLiteTensor* bias, TfLiteTensor* im2col,
                    TfLiteTensor* hwcn_weights, TfLiteTensor* output) {
-  printf("EvalQuantized()\n");
+
   const int32_t input_offset = -input->params.zero_point; 
   const int32_t filter_offset = -filter->params.zero_point;
   const int32_t output_offset = output->params.zero_point;  
@@ -206,8 +206,8 @@ void EvalQuantizedAccel(TfLiteContext* context, TfLiteNode* node,
                    TfLiteConvParams* params, const OpData& data,
                    const TfLiteTensor* input, const TfLiteTensor* filter,
                    const TfLiteTensor* bias, TfLiteTensor* im2col,
-                   TfLiteTensor* hwcn_weights, TfLiteTensor* output, bool fLimitCoeffs, bool fSimplifyQuant, bool fPrintOut) {
-  printf("EvalQuantizedAccel()\n");
+                   TfLiteTensor* hwcn_weights, TfLiteTensor* output, bool fPrintOut) {
+
   const int32_t input_offset = -input->params.zero_point; 
   const int32_t filter_offset = -filter->params.zero_point;
   const int32_t output_offset = output->params.zero_point;  
@@ -230,10 +230,10 @@ void EvalQuantizedAccel(TfLiteContext* context, TfLiteNode* node,
   op_params.quantized_activation_max = data.output_activation_max;
   reference_ops::ConvAccel(op_params, GetTensorShape(input),
                       GetTensorData<uint8_t>(input), GetTensorShape(filter),
-                      GetTensorData<uint8_t>(filter), GetTensorShape(bias),
+                      GetTensorData<int8_t>(filter), GetTensorShape(bias),
                       GetTensorData<int32_t>(bias), GetTensorShape(output),
                       GetTensorData<uint8_t>(output), GetTensorShape(im2col),
-                      GetTensorData<uint8_t>(im2col), nullptr, fLimitCoeffs, fSimplifyQuant, fPrintOut);
+                      GetTensorData<uint8_t>(im2col), nullptr, fPrintOut);
 }
 
 void EvalQuantizedPerChannel(TfLiteContext* context, TfLiteNode* node,
@@ -303,7 +303,7 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
   TFLITE_DCHECK(node->user_data != nullptr);
   const OpData& data = *(static_cast<const OpData*>(node->user_data));
 
-printf("input->type = %d\n", input->type);
+// printf("input->type = %d\n", input->type);
   switch (input->type & 0xFF) {  // Already know in/out types are same.
     case kTfLiteFloat32:
       EvalFloat(context, node, params, data, input, filter, bias, nullptr,
@@ -314,14 +314,12 @@ printf("input->type = %d\n", input->type);
                               output, nullptr);
       break;
     case kTfLiteUInt8:
-      if ((input->type & ~0xFF) == 0) {
-        printf("kTfLiteUInt8\n");
+      if (node->custom_initial_data_size == 0) {
         EvalQuantized(context, node, params, data, input, filter, bias, nullptr,
                       nullptr, output);
       } else {
-        printf("0xX00+kTfLiteUInt8\n");
         EvalQuantizedAccel(context, node, params, data, input, filter, bias, nullptr,
-                      nullptr, output, (input->type & 0x100) ? true : false, (input->type & 0x200) ? true : false, (input->type & 0x400) ? true : false);
+                      nullptr, output, (input->type & 0x400) ? true : false);
       }
       break;
     default:

@@ -29,8 +29,71 @@ limitations under the License.
 
 #include "tensorflow/lite/c/builtin_op_data.h"
 
+struct OpData {
+  TfLitePaddingValues padding;
+  // The scaling factor from input to output (aka the 'real multiplier') can
+  // be represented as a fixed point multiplier plus a left shift.
+  int32_t output_multiplier;
+  int output_shift;
+
+  // Per channel output multiplier and shift.
+  int32_t* per_channel_output_multiplier;
+  int32_t* per_channel_output_shift;
+
+  // The range of the fused activation layer. For example for kNone and
+  // uint8_t these would be 0 and 255.
+  int32_t output_activation_min;
+  int32_t output_activation_max;
+};
+
+
+void Accel_Prepare(TfLiteContext* context, TfLiteNode* node, const TfLiteRegistration* registration) {
+  if (registration->builtin_code == 3) { // Conv2D
+    // HACK -- Set custom_initial_data_size non-zero to indicate prepared for Accel
+    node->custom_initial_data_size = 0x01;
+    
+    // Convert filter coeffs to int8
+    //  * subtract zero_point (coverts for uint8 to int9 or therebouts)
+    //  * clamp to [-128,127] ensure a legal int8
+    int itensor = node->inputs->data[1];
+    printf("prep tensor[%d] for accel\n", itensor);
+    TfLiteTensor* filter = &context->tensors[itensor];
+    const OpData* opdata = (static_cast<const OpData*>(node->user_data));
+    double doutput_multiplier = (double)opdata->output_multiplier;
+    double dscale = doutput_multiplier / (double)(0x7fffffff);
+    
+    const int32_t filter_offset = filter->params.zero_point;
+    int32_t       filter_val;
+    for (int idata = 0; idata != filter->bytes; idata++) {
+      filter_val = (int32_t)(filter->data.uint8[idata]) - filter_offset;
+      // filter_val = (int32_t)(dscale * filter_val);  // Scale now, not during quant
+      filter_val = std::min(filter_val, (int32)127);
+      filter_val = std::max(filter_val, (int32)-128);
+      filter->data.int8[idata] = (int8_t)filter_val;
+    }
+    
+    // Accel will subtract 128 from all input data to convert to int8 from uint8
+    // so we need to add sum(128*filter) to the bias to account for this change
+    int num_filters = filter->dims->data[0];
+    int num_channels = filter->dims->data[3];
+    TfLiteTensor* bias = &context->tensors[node->inputs->data[2]];
+    for (int ifilter = 0; ifilter != num_filters; ifilter++) {
+      for (int ichannel = 0; ichannel != num_channels; ichannel++) {
+        bias->data.i32[ifilter] += 128 * (int32_t)filter->data.int8[ichannel + ifilter * num_channels];
+      }
+    }
+    
+    // Update output zero point to be applied pre quantization
+    TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
+    int32_t offset = output->params.zero_point;
+
+    int32 new_offset = offset << opdata->output_shift;  
+    output->params.zero_point = new_offset / dscale;
+  }
+}
+
 void PrintTensor(TfLiteTensor* ptensor, int itensor, int inode, int itensorx, bool fPrintData) {
-  printf("tensor[%d]->bytes=%d ", itensor, ptensor->bytes);
+  printf("tensor[%d](%x)->bytes=%d ", itensor, ptensor, ptensor->bytes);
   switch (ptensor->type) {
     case 2: printf("Int32"); break;
     case 3: printf("Uint8"); break;
@@ -81,22 +144,6 @@ void PrintTensor(TfLiteTensor* ptensor, int itensor, int inode, int itensorx, bo
   }
 }
 
-struct OpData {
-  TfLitePaddingValues padding;
-  // The scaling factor from input to output (aka the 'real multiplier') can
-  // be represented as a fixed point multiplier plus a left shift.
-  int32_t output_multiplier;
-  int output_shift;
-
-  // Per channel output multiplier and shift.
-  int32_t* per_channel_output_multiplier;
-  int32_t* per_channel_output_shift;
-
-  // The range of the fused activation layer. For example for kNone and
-  // uint8_t these would be 0 and 255.
-  int32_t output_activation_min;
-  int32_t output_activation_max;
-};
 
 
 
@@ -326,6 +373,7 @@ TfLiteStatus MicroInterpreter::AllocateTensors() {
         return kTfLiteError;
       }
     }
+    Accel_Prepare(&context_, node, registration);
   }
   context_helper_.SetNodeIndex(-1);
 
@@ -354,31 +402,34 @@ TfLiteStatus MicroInterpreter::Invoke() {
     TF_LITE_ENSURE_OK(&context_, AllocateTensors());
   }
 
+
   for (size_t i = 0; i < subgraph_->operators()->size(); ++i) {
-    if (i == 3) break;
     printf("\n\nWorking on node[%d]\n", i);
+    bool fPrintData = false;
+    
     auto* node = &(node_and_registrations_[i].node);
 
     
     auto* registration = node_and_registrations_[i].registration;
-    if ((registration->builtin_code == 3)  || i == 27) {
-      if ((i<100) && (registration->builtin_code == 3)) {
-        context_.tensors[node->inputs->data[0]].type |= 0x500;  // Flag as limited coeff & print output
+    if (registration->builtin_code == 3) {
+      if ((i == 2) && (registration->builtin_code == 3)) {
+        // context_.tensors[node->inputs->data[0]].type |= 0x400;  // Flag as print output
+        // fPrintData = true;
       }
     
-          PrintNode(node);
+         // PrintNode(node);
           
-      switch(registration->builtin_code) {
-          case 3: printf("BuiltinConv2d\n"); break;
-          case 4: printf("BuiltinDepthwiseConv2d\n"); break;
-          default:
-              printf("registration->builtin_code = %d\n", registration->builtin_code);
-      }
+      // switch(registration->builtin_code) {
+          // case 3: printf("BuiltinConv2d\n"); break;
+          // case 4: printf("BuiltinDepthwiseConv2d\n"); break;
+          // default:
+              // printf("registration->builtin_code = %d\n", registration->builtin_code);
+      // }
       for (size_t j = 0; j != node->inputs->size; j++) {
-        PrintTensor(&context_.tensors[node->inputs->data[j]], node->inputs->data[j], i, j, false);
+        //PrintTensor(&context_.tensors[node->inputs->data[j]], node->inputs->data[j], i, j, fPrintData);
       }
       for (size_t j = 0; j != node->outputs->size; j++) {
-        PrintTensor(&context_.tensors[node->outputs->data[j]], node->outputs->data[j], i, j, false);
+        //PrintTensor(&context_.tensors[node->outputs->data[j]], node->outputs->data[j], i, j, false);
       }
     }
 
@@ -391,10 +442,10 @@ TfLiteStatus MicroInterpreter::Invoke() {
       ScopedOperatorProfile scoped_profiler(
           profiler, OpNameFromRegistration(registration), i);
 #endif
-      printf("invoking\n");
-      printf("int32_t axNode%dTensor%d[] = {\n", i, node->outputs->data[0]);
+      // printf("invoking\n");
+      // printf("int32_t axNode%dTensor%d[] = {\n", i, node->outputs->data[0]);
       invoke_status = registration->invoke(&context_, node);
-      printf("}\n");
+      // printf("}\n");
       // Cleanup
       context_.tensors[node->inputs->data[0]].type &= 0xFF;
 

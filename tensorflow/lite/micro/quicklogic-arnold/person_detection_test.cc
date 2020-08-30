@@ -42,6 +42,21 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   tflite::ErrorReporter* error_reporter = &micro_error_reporter;
   
   printf("Arnold test bed with gpio\n");
+  
+  int32_t offset = 113;
+  int32_t shift = 10;
+  offset = offset << shift;
+  printf("shifted_offset = %d\n", offset);
+  int32_t frac = 0x7f67f4f8;
+  int32_t div  = 0x7fffffff;
+  
+  double dfrac = frac;
+  double ddiv = div;
+  double doffset = frac / ddiv;
+  
+  printf("d = %f = %f/%f\n", doffset, dfrac, ddiv);
+  int32_t newoffset = offset / doffset;
+  printf("offset = %d, newoffset = %d\n", offset, newoffset);
   int fref = 6;
   int fout = 480;
   padcfg();
