@@ -313,6 +313,7 @@ inline void ConvAccel(const ConvParams& params, const RuntimeShape& input_shape,
   const int output_height = output_shape.Dims(1);
   const int output_width = output_shape.Dims(2);
   
+  int first = 1;
   int32 filter_val_max = -10000;
   int32 filter_val_min =  10000;
   int32 filter_act_max = -10000;
@@ -372,7 +373,10 @@ inline void ConvAccel(const ConvParams& params, const RuntimeShape& input_shape,
             }
           }
           if (bias_data) {
-            acc += bias_data[out_channel];
+            acc += bias_data[out_channel];  // Includes output_offset
+                                            // Scaled so we can move it prior to quant
+                                            // By bringing it earlier, quantization is now linear, not affine
+                                            // NOTE: did add this into bias_data
           }
           if (fPrintOut) {
             printf(" 0x%08x,", acc);
@@ -382,9 +386,9 @@ inline void ConvAccel(const ConvParams& params, const RuntimeShape& input_shape,
               printf("\n");
             }
           }
-          acc += output_offset; // Scaled so we can move it prior to quant
-                                // By bringing it earlier, quantization is now linear, not affine
-                                // NOTE: should just add this into bias_data
+          // acc += output_offset; // Scaled so we can move it prior to quant
+                                // // By bringing it earlier, quantization is now linear, not affine
+                                // // NOTE: should just add this into bias_data
           accmax = std::max(accmax, acc);
           accmin = std::min(accmin, acc);
           acc_orig = MultiplyByQuantizedMultiplier(acc, output_multiplier, output_shift);
@@ -420,6 +424,37 @@ inline void ConvAccel(const ConvParams& params, const RuntimeShape& input_shape,
           int sv5 = (sv4 > sc2) ? (sc3) : (sc1 * (sv4 & 0xFF));
           int sv6 = ((sv5 + (1 << 5)) >> 6);
           acc_new = sv6;
+          
+          int tc1 = 0xFF & ((output_multiplier + (1<<23)) >> 24);                 // Load time: (uint8_t)
+          int tc2 = (1 << (14 + shift + 1))/tc1;                                  // Load time 
+          // int tc1 = output_multiplier;
+          // int tc2 = output_offset;
+          int tv5 = tc1 * (0xFF & (acc + (1 << shift)) >> (shift + 1));
+          int tv6 = (acc < 0) ? 0 : ((acc < tc2) ? ((tv5 + (1 << 5)) >> 6) : 255);
+          acc_new = tv6;
+          
+          // int32_t uc1 = output_multiplier / (1<<16);                // Load time
+          // int16_t uc2 = uc1;                                        // Load time 
+          // uc2 = output_multiplier;
+          
+          // int16_t uv1 = acc >> 7;
+          // int32_t uv2 = uc2 * uv1;
+          // int16_t uv3 = uv2 >> (shift + 7);
+          // acc_new = uv3;
+          
+          //int16_t uv1 = acc >> (shift - 5);
+          // int16_t uv1 = acc >> shift;
+          int32_t uv2 = (int16_t)output_multiplier * (int16_t)(acc >> shift);
+          int16_t uv3 = uv2 >> 16;
+          int16_t uv4 = uv3 >> 4;
+          acc_new = uv4;
+          
+          
+          // if (first < 10) {
+            // printf("output_multiplier=%d, shift=%d, uc1=%d, uc2=%d\n", output_multiplier, shift, uc1, uc2);
+            // printf("acc=%d, uv1=%d, uv2=%d, uv3=%d, uv4=%d acc_new=%d, acc_orig=%d\n", acc, uv1, uv2, uv3, uv4, acc_new, acc_orig);
+            // first++;
+          // }
           
           // diff = (acc_new >= 0 && acc_orig >= 0) ? (acc_new - acc_orig) : 0;
           // diff_max = std::max(diff_max, diff);

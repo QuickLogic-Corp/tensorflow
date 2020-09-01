@@ -58,7 +58,8 @@ void Accel_Prepare(TfLiteContext* context, TfLiteNode* node, const TfLiteRegistr
     int itensor = node->inputs->data[1];
     printf("prep tensor[%d] for accel\n", itensor);
     TfLiteTensor* filter = &context->tensors[itensor];
-    const OpData* opdata = (static_cast<const OpData*>(node->user_data));
+    //const OpData* opdata = (static_cast<const OpData*>(node->user_data));
+    OpData* opdata = (static_cast<OpData*>(node->user_data));
     double doutput_multiplier = (double)opdata->output_multiplier;
     double dscale = doutput_multiplier / (double)(0x7fffffff);
     
@@ -83,12 +84,22 @@ void Accel_Prepare(TfLiteContext* context, TfLiteNode* node, const TfLiteRegistr
       }
     }
     
-    // Update output zero point to be applied pre quantization
+    // Update output zero point to be applied pre quantization and include in channel bias
     TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
     int32_t offset = output->params.zero_point;
 
     int32 new_offset = offset << opdata->output_shift;  
-    output->params.zero_point = new_offset / dscale;
+     for (int ifilter = 0; ifilter != num_filters; ifilter++) {
+        bias->data.i32[ifilter] += new_offset / dscale;
+    }
+    
+    // Now adjust output_multiplier and shift
+    int om =((opdata->output_multiplier + (1<<15)) >> 16);                 // Adjust to be(int16_t)
+    if ((om >> 16) != 0x00000000 && (om >> 16) != 0xFFFFFFFF) {
+      printf("ERROR: output_multiplier did not scale OK\n");
+    }
+    opdata->output_multiplier = om;
+    opdata->output_shift = opdata->output_shift - 5;                      // Adjust to scale nicely
   }
 }
 
@@ -404,7 +415,7 @@ TfLiteStatus MicroInterpreter::Invoke() {
 
 
   for (size_t i = 0; i < subgraph_->operators()->size(); ++i) {
-    printf("\n\nWorking on node[%d]\n", i);
+    printf("Working on node[%d]\n", i);
     bool fPrintData = false;
     
     auto* node = &(node_and_registrations_[i].node);

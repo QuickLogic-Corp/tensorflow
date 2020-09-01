@@ -223,7 +223,7 @@ void EvalQuantizedAccel(TfLiteContext* context, TfLiteNode* node,
   op_params.dilation_height_factor = params->dilation_height_factor;
   op_params.input_offset = input_offset;
   op_params.weights_offset = filter_offset;
-  op_params.output_offset = output_offset;
+  op_params.output_offset = output_offset;  // Hijacked as limit in quant
   op_params.output_multiplier = data.output_multiplier;
   op_params.output_shift = -data.output_shift;
   op_params.quantized_activation_min = data.output_activation_min;
