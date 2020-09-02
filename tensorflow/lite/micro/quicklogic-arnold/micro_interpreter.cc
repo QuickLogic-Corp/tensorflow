@@ -46,62 +46,140 @@ struct OpData {
   int32_t output_activation_max;
 };
 
+namespace tflite {
 
-void Accel_Prepare(TfLiteContext* context, TfLiteNode* node, const TfLiteRegistration* registration) {
-  if (registration->builtin_code == 3) { // Conv2D
-    // HACK -- Set custom_initial_data_size non-zero to indicate prepared for Accel
-    node->custom_initial_data_size = 0x01;
-    
-    // Convert filter coeffs to int8
-    //  * subtract zero_point (coverts for uint8 to int9 or therebouts)
-    //  * clamp to [-128,127] ensure a legal int8
-    int itensor = node->inputs->data[1];
-    printf("prep tensor[%d] for accel\n", itensor);
-    TfLiteTensor* filter = &context->tensors[itensor];
-    //const OpData* opdata = (static_cast<const OpData*>(node->user_data));
-    OpData* opdata = (static_cast<OpData*>(node->user_data));
-    double doutput_multiplier = (double)opdata->output_multiplier;
-    double dscale = doutput_multiplier / (double)(0x7fffffff);
-    
-    const int32_t filter_offset = filter->params.zero_point;
-    int32_t       filter_val;
-    for (int idata = 0; idata != filter->bytes; idata++) {
-      filter_val = (int32_t)(filter->data.uint8[idata]) - filter_offset;
-      // filter_val = (int32_t)(dscale * filter_val);  // Scale now, not during quant
-      filter_val = std::min(filter_val, (int32)127);
-      filter_val = std::max(filter_val, (int32)-128);
-      filter->data.int8[idata] = (int8_t)filter_val;
-    }
-    
-    // Accel will subtract 128 from all input data to convert to int8 from uint8
-    // so we need to add sum(128*filter) to the bias to account for this change
-    int num_filters = filter->dims->data[0];
-    int num_channels = filter->dims->data[3];
-    TfLiteTensor* bias = &context->tensors[node->inputs->data[2]];
-    for (int ifilter = 0; ifilter != num_filters; ifilter++) {
-      for (int ichannel = 0; ichannel != num_channels; ichannel++) {
-        bias->data.i32[ifilter] += 128 * (int32_t)filter->data.int8[ichannel + ifilter * num_channels];
+  void Accel_PrepareForAccel(TfLiteContext* context, const SubGraph* subgraph_, NodeAndRegistration* node_and_registrations_) {
+    // Need a scratch buffer, so hunt through looking for largest RW tensor
+    TfLiteTensor* scratch_tensor;
+    size_t  scratch_size = 0;
+    for (size_t i = 0; i != context->tensors_size; i++) {
+      TfLiteTensor* tensor = &context->tensors[i];
+      if (tensor->allocation_type == kTfLiteArenaRw) {
+        if (tensor->bytes > scratch_size) {
+          scratch_tensor = tensor;
+          scratch_size = scratch_tensor->bytes;
+          printf("scratch_tensor = %x\n", scratch_tensor);
+        }
       }
     }
+    printf("scratch area is %d bytes\n", scratch_size);
     
-    // Update output zero point to be applied pre quantization and include in channel bias
-    TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
-    int32_t offset = output->params.zero_point;
+    for (size_t i = 0; i < subgraph_->operators()->size(); ++i) {
+      auto* node = &(node_and_registrations_[i].node);
+      auto* registration = node_and_registrations_[i].registration;
 
-    int32 new_offset = offset << opdata->output_shift;  
-     for (int ifilter = 0; ifilter != num_filters; ifilter++) {
-        bias->data.i32[ifilter] += new_offset / dscale;
+      if (registration->builtin_code == 3) { // Conv2D
+        const int simd = 8; // How many items can we operate in parallel
+        //break;
+        
+        // Get shape of filter and process iff it is accelerator compatible
+        int itensor = node->inputs->data[1];
+        TfLiteTensor* filter = &context->tensors[itensor];
+        printf("Considering tensor[%d], node[%d] for accel\n", itensor, i);
+        if (filter->dims->size != 4) {
+          printf("Skipping because filter not 4D\n");
+          break;
+        }
+        if (filter->dims->data[1] != 1 || filter->dims->data[2] != 1) {
+          printf("Skipping because filter not 1x1xC\n");
+          break;
+        }
+        if ((filter->dims->data[0] & 0x7) != 0) {
+          printf("Skipping because number of filters not a multiple of 8\n");
+          break;
+        }
+        if (simd * filter->dims->data[3] > scratch_size) {
+          printf("Skipping because scratch area is too small\n");
+          break;
+        }
+        
+        printf("converting tensor[%d], node[%d] for accel\n", itensor, i);
+        // HACK -- Set custom_initial_data_size non-zero to indicate prepared for Accel
+        node->custom_initial_data_size = 0x01;
+        
+        // Convert filter coeffs to int8
+        //  * subtract zero_point (coverts for uint8 to int9 or therebouts)
+        //  * clamp to [-128,127] ensure a legal int8
+        
+        const int32_t filter_offset = filter->params.zero_point;
+        int32_t       filter_val;
+        for (int idata = 0; idata != filter->bytes; idata++) {
+          filter_val = (int32_t)(filter->data.uint8[idata]) - filter_offset;
+          filter_val = std::min(filter_val, (int32)127);
+          filter_val = std::max(filter_val, (int32)-128);
+          filter->data.int8[idata] = (int8_t)filter_val;
+        }
+        
+        // // Print filter data
+        // for (int i = 0; i != 100; i++) {
+          // printf("%d,%02x\n", i, filter->data.uint8[i]);
+        // }
+        
+        // Accel will subtract 128 from all input data to convert to int8 from uint8
+        // so we need to add sum(128*filter) to the bias to account for this change
+        int num_filters = filter->dims->data[0];
+        int num_channels = filter->dims->data[3];
+        TfLiteTensor* bias = &context->tensors[node->inputs->data[2]];
+        for (int ifilter = 0; ifilter != num_filters; ifilter++) {
+          for (int ichannel = 0; ichannel != num_channels; ichannel++) {
+            bias->data.i32[ifilter] += 128 * (int32_t)filter->data.int8[ichannel + ifilter * num_channels];
+          }
+        }
+        
+        // Update output zero point to be applied pre quantization and include in channel bias
+        OpData* opdata = (static_cast<OpData*>(node->user_data));
+        double doutput_multiplier = (double)opdata->output_multiplier;
+        double dscale = doutput_multiplier / (double)(0x7fffffff);
+        TfLiteTensor* output = &context->tensors[node->outputs->data[0]];
+        int32_t offset = output->params.zero_point;
+
+        int32 new_offset = offset << opdata->output_shift;  
+         for (int ifilter = 0; ifilter != num_filters; ifilter++) {
+            bias->data.i32[ifilter] += new_offset / dscale;
+        }
+        
+        // Now adjust output_multiplier and shift
+        int om =((opdata->output_multiplier + (1<<15)) >> 16);                 // Adjust to be(int16_t)
+        if ((om >> 16) != 0x00000000 && (om >> 16) != 0xFFFFFFFF) {
+          printf("ERROR: output_multiplier did not scale OK\n");
+        }
+        opdata->output_multiplier = om;
+        opdata->output_shift = opdata->output_shift - 5;                      // Adjust to scale nicely
+        
+        // Reorganize the filter data for SIMD operation
+        int32_t   channels = filter->dims->data[3];
+        uint8_t*  psrc = filter->data.uint8;
+        uint8_t*  psrc2 = filter->data.uint8;
+        uint32_t* pdst;
+        uint8_t*  pdst2;
+        while (psrc < filter->data.uint8 + filter->bytes) {
+          pdst = (uint32_t*)scratch_tensor->data.i32;
+          for (int ichan = 0; ichan != channels; ichan++) {
+            for (int isimd = 0; isimd != simd/4; isimd++) {
+              *pdst++ = *(psrc + 3 * channels) << (3 * 8) |
+                        *(psrc + 2 * channels) << (2 * 8) |
+                        *(psrc + 1 * channels) << (1 * 8) |
+                        *(psrc + 0 * channels) << (0 * 8);
+              psrc += 4 * channels;
+            }
+            psrc = psrc - (simd * channels) + 1; // psrc pointing to first block of next grouping, so back up to first block of current grouping, and move to next channel
+          }
+          // Copy data from scratch into source
+          pdst2 = scratch_tensor->data.uint8; 
+          for (int i = 0; i != simd * channels; i++) {
+            *psrc2++ = *pdst2++;
+          }
+          psrc = psrc2; // Since we just overwrote the converted data, that pointer points to then start of the next part
+        }
+        printf("scratch_tensor = %x\n", scratch_tensor);
+        printf("psrc2 = %0x, filter->data.uint8 + filter->bytes = %x, scratch_tensor->data.uint8 + scratch_tensor->bytes = %x\n", psrc2, filter->data.uint8 + filter->bytes, scratch_tensor->data.uint8 + scratch_tensor->bytes);
+        // Now data is in chunks of SIMD size, the "number of filters" drops
+        filter->dims->data[0] = filter->dims->data[0] / simd;
+      }
     }
-    
-    // Now adjust output_multiplier and shift
-    int om =((opdata->output_multiplier + (1<<15)) >> 16);                 // Adjust to be(int16_t)
-    if ((om >> 16) != 0x00000000 && (om >> 16) != 0xFFFFFFFF) {
-      printf("ERROR: output_multiplier did not scale OK\n");
-    }
-    opdata->output_multiplier = om;
-    opdata->output_shift = opdata->output_shift - 5;                      // Adjust to scale nicely
   }
-}
+  
+} // namespace
 
 void PrintTensor(TfLiteTensor* ptensor, int itensor, int inode, int itensorx, bool fPrintData) {
   printf("tensor[%d](%x)->bytes=%d ", itensor, ptensor, ptensor->bytes);
@@ -384,8 +462,8 @@ TfLiteStatus MicroInterpreter::AllocateTensors() {
         return kTfLiteError;
       }
     }
-    Accel_Prepare(&context_, node, registration);
   }
+  
   context_helper_.SetNodeIndex(-1);
 
   // Prepare is done, we're ready for Invoke. Memory allocation is no longer
@@ -397,6 +475,11 @@ TfLiteStatus MicroInterpreter::AllocateTensors() {
   TF_LITE_ENSURE_OK(&context_,
                     allocator_.FinishModelAllocation(model_, &context_));
   tensors_allocated_ = true;
+  
+  // All conventional setup is done -- track down ops capable of being accelerated and 
+  // modify data appropriately
+  Accel_PrepareForAccel(&context_, subgraph_, node_and_registrations_);
+  
   return kTfLiteOk;
 }
 

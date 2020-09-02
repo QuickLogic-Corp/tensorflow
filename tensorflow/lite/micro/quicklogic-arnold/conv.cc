@@ -202,7 +202,7 @@ void EvalQuantized(TfLiteContext* context, TfLiteNode* node,
                       GetTensorData<uint8_t>(im2col), nullptr);
 }
 
-void EvalQuantizedAccel(TfLiteContext* context, TfLiteNode* node,
+void EvalQuantizedAccelSIMD(TfLiteContext* context, TfLiteNode* node,
                    TfLiteConvParams* params, const OpData& data,
                    const TfLiteTensor* input, const TfLiteTensor* filter,
                    const TfLiteTensor* bias, TfLiteTensor* im2col,
@@ -228,12 +228,13 @@ void EvalQuantizedAccel(TfLiteContext* context, TfLiteNode* node,
   op_params.output_shift = -data.output_shift;
   op_params.quantized_activation_min = data.output_activation_min;
   op_params.quantized_activation_max = data.output_activation_max;
-  reference_ops::ConvAccel(op_params, GetTensorShape(input),
-                      GetTensorData<uint8_t>(input), GetTensorShape(filter),
-                      GetTensorData<int8_t>(filter), GetTensorShape(bias),
-                      GetTensorData<int32_t>(bias), GetTensorShape(output),
-                      GetTensorData<uint8_t>(output), GetTensorShape(im2col),
-                      GetTensorData<uint8_t>(im2col), nullptr, fPrintOut);
+  reference_ops::ConvAccelSIMD(op_params, 
+                      GetTensorShape(input), GetTensorData<uint8_t>(input), 
+                      GetTensorShape(filter), GetTensorData<int8_t>(filter), 
+                      GetTensorShape(bias), GetTensorData<int32_t>(bias), 
+                      GetTensorShape(output), GetTensorData<uint8_t>(output), 
+                      GetTensorShape(im2col), GetTensorData<uint8_t>(im2col), 
+                      nullptr, fPrintOut);
 }
 
 void EvalQuantizedPerChannel(TfLiteContext* context, TfLiteNode* node,
@@ -318,7 +319,7 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
         EvalQuantized(context, node, params, data, input, filter, bias, nullptr,
                       nullptr, output);
       } else {
-        EvalQuantizedAccel(context, node, params, data, input, filter, bias, nullptr,
+        EvalQuantizedAccelSIMD(context, node, params, data, input, filter, bias, nullptr,
                       nullptr, output, (input->type & 0x400) ? true : false);
       }
       break;
