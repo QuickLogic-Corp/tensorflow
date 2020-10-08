@@ -330,6 +330,7 @@ inline void ConvAccel(const ConvParams& params, const RuntimeShape& input_shape,
   int32 output_multiplier_quant;
   shift = (output_multiplier < 0x60000000) ? (-output_shift): (-output_shift);
   output_multiplier_quant = output_multiplier & quant_mask;
+  printf("output_multiplier_quant = 0x%08x, output_shift = %d\n",output_multiplier_quant, output_shift);
   int icol = 0;
   
   for (int batch = 0; batch < batches; ++batch) {

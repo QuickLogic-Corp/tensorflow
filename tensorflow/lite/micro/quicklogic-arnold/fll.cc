@@ -1,9 +1,6 @@
-/* 
 
-    printf("Attempted to program FLL0 %d MHz\n",prog_fll(0,66,2));
-*/
 #include <stdio.h>
-
+#define REFCLK 32660
 int spow2 (int exp) {
   int i, ret;
   ret = 1;
@@ -12,6 +9,51 @@ int spow2 (int exp) {
     for (i = 0; i < exp; ret = ret * 2, i++);
   return ret;
 }
+
+int prog_fll(int fll, int mult, int div) {
+  int mult_out;
+  int ret = (REFCLK * (mult+1))/spow2(div?div-1:0);
+  int i;
+  i = 0x80000000 | 
+    (div << 26) | (0xf0 << 16) | mult; // 2x RefClock enable FLL
+  switch (fll) {
+  case 0:
+    *(unsigned int*)0x1a100008 = 0x42004107; // select ref clock as input
+    *(unsigned int*)0x1a100004 = i;
+    printf("FLL0 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
+	   *(unsigned int*)0x1a100000,
+	   *(unsigned int*)0x1a100004,
+	   *(unsigned int*)0x1a100008,
+	   *(unsigned int*)0x1a10000C);
+    mult_out = *(unsigned int*)0x1a100000;
+    break;
+  case 1:
+    *(unsigned int*)0x1a100018 = 0x42004107; // select ref clock as input
+    *(unsigned int*)0x1a100014 = i;
+    printf("FLL1=1 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
+	   *(unsigned int*)0x1a100010,
+	   *(unsigned int*)0x1a100014,
+	   *(unsigned int*)0x1a100018,
+	   *(unsigned int*)0x1a10001C);
+        mult_out = *(unsigned int*)0x1a100010;
+    break;
+  case 2:
+    //   *(unsigned int*)0x1a10002C = 0x00808000;
+    *(unsigned int*)0x1a100028 = 0x42004107; // select ref clock as input
+    *(unsigned int*)0x1a100024 = i;
+    printf("FLL2 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
+	   *(unsigned int*)0x1a100020,
+	   *(unsigned int*)0x1a100024,
+	   *(unsigned int*)0x1a100028,
+	   *(unsigned int*)0x1a10002C);
+            mult_out = *(unsigned int*)0x1a100020;
+    break;
+  }
+  ret  = (REFCLK * (mult_out+1))/spow2(div?div-1:0);
+  return ret;
+}
+/*
+
 
 int prog_fll(int fll, int fref, int mult, int div) {
   int ret = (12 * (mult+1))/spow2(div?(div-1):0);
@@ -71,3 +113,4 @@ int prog_fll(int fll, int fref, int mult, int div) {
   printf("StatusI=0x%08x [actual mult=%d, assuming %dMHz => %dMHz\n", regStatusI, regStatusI, fref, fref * regStatusI);
   return ret;
 }
+*/

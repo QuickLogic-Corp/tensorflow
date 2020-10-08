@@ -355,12 +355,13 @@ TfLiteStatus MicroInterpreter::Invoke() {
   }
 
   for (size_t i = 0; i < subgraph_->operators()->size(); ++i) {
-    if (i == 3) break;
+    //    if (i == 3) break;
     printf("\n\nWorking on node[%d]\n", i);
     auto* node = &(node_and_registrations_[i].node);
 
     
     auto* registration = node_and_registrations_[i].registration;
+    printf("registration->builtin_code = %d, i=%d\n",registration->builtin_code,i);
     if ((registration->builtin_code == 3)  || i == 27) {
       if ((i<100) && (registration->builtin_code == 3)) {
         context_.tensors[node->inputs->data[0]].type |= 0x500;  // Flag as limited coeff & print output
@@ -374,14 +375,11 @@ TfLiteStatus MicroInterpreter::Invoke() {
           default:
               printf("registration->builtin_code = %d\n", registration->builtin_code);
       }
+      printf("INPUTS:\n");
       for (size_t j = 0; j != node->inputs->size; j++) {
-        PrintTensor(&context_.tensors[node->inputs->data[j]], node->inputs->data[j], i, j, false);
-      }
-      for (size_t j = 0; j != node->outputs->size; j++) {
-        PrintTensor(&context_.tensors[node->outputs->data[j]], node->outputs->data[j], i, j, false);
+        PrintTensor(&context_.tensors[node->inputs->data[j]], node->inputs->data[j], i, j, true);
       }
     }
-
     if (registration->invoke) {
       TfLiteStatus invoke_status;
 #ifndef NDEBUG  // Omit profiler overhead from release builds.
@@ -397,6 +395,13 @@ TfLiteStatus MicroInterpreter::Invoke() {
       printf("}\n");
       // Cleanup
       context_.tensors[node->inputs->data[0]].type &= 0xFF;
+
+      printf("OUTPUTS:\n");
+      for (size_t j = 0; j != node->outputs->size; j++) {
+        PrintTensor(&context_.tensors[node->outputs->data[j]], node->outputs->data[j], i, j, true);
+      }
+ 
+
 
       if (invoke_status == kTfLiteError) {
         TF_LITE_REPORT_ERROR(

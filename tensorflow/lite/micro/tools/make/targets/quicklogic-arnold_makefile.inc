@@ -3,8 +3,8 @@ ifeq ($(TARGET), quicklogic-arnold)
   TARGET_ARCH := rv32imfcxpulpv2
   TARGET_TOOLCHAIN_ROOT := /opt/riscv/bin/
   TARGET_TOOLCHAIN_PREFIX := riscv32-unknown-elf-
-	
-	PULP_BUILDER = /home/gmartin/ETH/TRY5/arnold/pulp-builder
+  # change PULP_BUILDER to be the location where pulp-builder is 
+  PULP_BUILDER = /home/gregmartin/ETH/TRY2/pulp-builder
 
   PLATFORM_FLAGS = -D__riscv__z
   PLATFORM_FLAGS += -mfdiv
@@ -31,14 +31,15 @@ ifeq ($(TARGET), quicklogic-arnold)
   BUILD_TYPE := micro
 
   INCLUDES += \
-	-I/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/include/io \
-	-I/home/gmartin/ETH/TRY5/arnold/pulp-builder/install/include \
-	-include /home/gmartin/ETH/TRY5/arnold/pulp-builder/pulp-rt-examples/arnold_tests/gpio_toggle/build/arnold/fc_config.h
+	-I${PULP_BUILDER}/install/include/io \
+	-I${PULP_BUILDER}/install/include \
+	-include ${PULP_BUILDER}/pulp-runtime-examples/arnold_tests/gpio_toggle/build/arnold/fc_config.h
 	#-I${PULP_BUILDER}/hal/include/
 	#-I${PULP_BUILDER}/archi/include/
 
   SRCS += tensorflow/lite/micro/quicklogic-arnold/fll.cc
   SRCS += tensorflow/lite/micro/quicklogic-arnold/gpio.cc
+  SRCS += tensorflow/lite/micro/quicklogic-arnold/programFPGA.cc
 
   MICROLITE_CC_SRCS += $(SRCS)
 

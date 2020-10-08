@@ -28,7 +28,14 @@ limitations under the License.
 #include "tensorflow/lite/version.h"
 
 #include "fll.h"
-#include "gpio.h" 
+#include "gpio.h"
+//#include "programFPGA.h"
+#include "arnold_apb_ctl.h"
+#include "apb_conv2d.h"
+
+unsigned int __rt_iodev = 1;
+unsigned int __rt_iodev_uart_baudrate = 115200;
+unsigned int __rt_iodev_uart_channel = 0;
 
 // Create an area of memory to use for input, output, and intermediate arrays.
 constexpr int tensor_arena_size = 93 * 1024;
@@ -40,12 +47,21 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   // Set up logging.
   tflite::MicroErrorReporter micro_error_reporter;
   tflite::ErrorReporter* error_reporter = &micro_error_reporter;
-  
+
+  printf("Attempted to program FLL0 %d Hz\n",prog_fll(0,28000,2));  // 402 MHz
+  printf("Attempted to program FLL1 %d Hz\n",prog_fll(1,6100,3));   //50 MHz
+  printf("Attempted to program FLL2 %d Hz\n",prog_fll(2,7400,3));  // 61 MHs
+
+  apb->fpga_clk = 2;
+  //programFPGA();
+  apb->fpga_reset = 1;
+  apb->fpga_reset = 0xF;
   printf("Arnold test bed with gpio\n");
   int fref = 6;
   int fout = 480;
+
   padcfg();
-  setgpio5(0);
+  /*  setgpio5(0);
   prog_fll(0, fref, fout/fref,1);
   setgpio5(0);
   prog_fll(0, fref, fout/fref,1);
@@ -55,7 +71,7 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   prog_fll(0, fref, fout/fref,1);
   setgpio5(0);
   prog_fll(0, fref, fout/fref,1);
-
+  */
 
   // Map the model into a usable data structure. This doesn't involve any
   // copying or parsing, it's a very lightweight operation.
