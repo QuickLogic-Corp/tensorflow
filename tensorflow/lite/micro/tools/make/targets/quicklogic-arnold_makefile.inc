@@ -7,6 +7,7 @@ ifeq ($(TARGET), quicklogic-arnold)
   PULP_BUILDER = /home/gregmartin/ETH/TRY2/pulp-builder
 
   PLATFORM_FLAGS = -D__riscv__z
+  PLATFORM_FLAGS += -march=rv32imfcxpulpv2 
   PLATFORM_FLAGS += -mfdiv
 #  PLATFORM_FLAGS += -O3
   PLATFORM_FLAGS += -fdata-sections
@@ -25,38 +26,44 @@ ifeq ($(TARGET), quicklogic-arnold)
   CXXFLAGS += -fno-exceptions
   CXXFLAGS += --std=gnu++11
   CXXFLAGS += -Itensorflow/lite/micro/quicklogic-arnold
+  CXXFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/install/include
+  CXXFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/hal/include
+  CXXFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/archi/include
   
   CCFLAGS += $(PLATFORM_FLAGS)
+  CCFLAGS += --std=gnu99
+  CCFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/install/include
+  CCFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/hal/include
+  CCFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/archi/include
 
   BUILD_TYPE := micro
 
   INCLUDES += \
 	-I${PULP_BUILDER}/install/include/io \
-	-I${PULP_BUILDER}/install/include \
-	-include ${PULP_BUILDER}/pulp-runtime-examples/arnold_tests/gpio_toggle/build/arnold/fc_config.h
-	#-I${PULP_BUILDER}/hal/include/
-	#-I${PULP_BUILDER}/archi/include/
+	-I${PULP_BUILDER}/install/include
+
 
   SRCS += tensorflow/lite/micro/quicklogic-arnold/fll.cc
   SRCS += tensorflow/lite/micro/quicklogic-arnold/gpio.cc
   SRCS += tensorflow/lite/micro/quicklogic-arnold/programFPGA.cc
+    SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_conf.c
+        SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_pad_conf.c
 
   MICROLITE_CC_SRCS += $(SRCS)
 
   MICRO_SPEECH_TEST_SRCS += 
 
   LDFLAGS += \
-   -D__riscv__\
+        -D__riscv__\
 	-MMD\
 	-MP\
-	-lbench\
 	-nostartfiles\
 	-nostdlib\
 	-Wl,--gc-sections\
 	-L${PULP_BUILDER}/install/rules\
 	-T../../../../../targets/quicklogic-arnold/arnold.ld\
 	-L${PULP_BUILDER}/install/lib/arnold\
-	-L${PULP_BUILDER}/install/lib/arnold/arnold\
+	-lbench\
 	-lrt\
 	-lrtio\
 	-lrt\

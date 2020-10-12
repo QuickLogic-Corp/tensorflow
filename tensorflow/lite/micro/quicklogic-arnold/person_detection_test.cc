@@ -29,7 +29,7 @@ limitations under the License.
 
 #include "fll.h"
 #include "gpio.h"
-//#include "programFPGA.h"
+#include "programFPGA.h"
 #include "arnold_apb_ctl.h"
 #include "apb_conv2d.h"
 
@@ -48,30 +48,28 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   tflite::MicroErrorReporter micro_error_reporter;
   tflite::ErrorReporter* error_reporter = &micro_error_reporter;
 
-  printf("Attempted to program FLL0 %d Hz\n",prog_fll(0,28000,2));  // 402 MHz
-  printf("Attempted to program FLL1 %d Hz\n",prog_fll(1,6100,3));   //50 MHz
-  printf("Attempted to program FLL2 %d Hz\n",prog_fll(2,7400,3));  // 61 MHs
-
+  //  printf("Attempted to program FLL0 %d Hz\n",prog_fll(0,28000,2));  // 402 MHz
+  //  printf("Attempted to program FLL1 %d Hz\n",prog_fll(1,6100,3));   //50 MHz
+  //  printf("Attempted to program FLL2 %d Hz\n",prog_fll(2,7400,3));  // 61 MHs
+  prog_fll(0,28000,2);  // 402 MHz
+  // prog_fll(1,6100,2);  // 402 MHz
+  prog_fll(2,7400,3);  // 402 MHz 
+  
   apb->fpga_clk = 2;
-  //programFPGA();
+  programFPGA();
+
+  apb->padfunc0 = 0xaaa82aaa;  // gpio 15-00 from efpga .. uart
+  apb->padfunc1 = 0xaaaaaaaa;  // gpio 31-16 from efpga
+  printf("Address of reset = %x\n", &apb->fpga_reset);
   apb->fpga_reset = 1;
   apb->fpga_reset = 0xF;
-  printf("Arnold test bed with gpio\n");
-  int fref = 6;
-  int fout = 480;
+  
+  apb->fpga_gate  = 0xFFFF;
+  efpga->debug_mux = 0x02;
 
-  padcfg();
-  /*  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(1);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  */
+
+  printf("Arnold test bed with gpio\n");
+
 
   // Map the model into a usable data structure. This doesn't involve any
   // copying or parsing, it's a very lightweight operation.

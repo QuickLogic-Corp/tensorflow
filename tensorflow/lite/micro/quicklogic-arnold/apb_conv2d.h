@@ -20,6 +20,7 @@ typedef struct {
   volatile unsigned int bias_data;    // 0x3C
   volatile unsigned int debug_mux;    // 0x40
   volatile unsigned int clocks;    // 0x44
+  volatile unsigned int quant;
 
 } fpga_typedef ;
 
