@@ -380,12 +380,6 @@ inline void ConvAccelSIMD(const ConvParams& params,
   printf("Pixel_base   = 0x%05x\n", efpga->pixel_base);
   printf("Filter_base  = 0x%05x\n", efpga->filter_base);
   printf("Bias_base    = 0x%05x\n", efpga->bias_base);
-  for (int i = 0 ; i < 16 ; i++ ) {
-    unsigned int *tmp;
-    tmp = (unsigned int*) input_data;
-    printf("Pixel = %08x %08x %08x %08x\n",
-	   tmp[i], tmp[i+4],tmp[i+8],tmp[i+12]);
-  }
   efpga->control = 1;
   while (efpga->control & 1) {}
   printf ("Elapsed Clocks = %d \n",efpga->clocks);//- elapsed_clocks);
@@ -414,7 +408,7 @@ inline void ConvAccelSIMD(const ConvParams& params,
                                                           in_x, in_channel)];
                                                           
                       if (first++ < 100) {
-                        //printf("%d,%d,0x%02x,0x%02x\n", first, ifilt, filter_val, input_val);
+			//  printf("%d,%d,0x%02x,0x%02x\n", first, ifilt, filter_val, input_val);
                       }
                       
                       // ***Expect this to be done in the accelerator*** //
@@ -430,7 +424,7 @@ inline void ConvAccelSIMD(const ConvParams& params,
                       // filter_act_min = std::min(filter_act_min, filter_val);
 
                       acc += filter_val * input_val;
-                      //printf("fv, iv, acc: %02x, %02x, %02x\n", filter_val, input_val, acc);
+                      printf("fv[%d], iv, acc: %02x, %02x, %02x\n",ifilt, filter_val, input_val, acc);
                     }
                   }
                 }
@@ -440,6 +434,7 @@ inline void ConvAccelSIMD(const ConvParams& params,
                                                 // Scaled so we can move it prior to quant
                                                 // By bringing it earlier, quantization is now linear, not affine
                                                 // NOTE: did add this into bias_data
+		printf("bias[%d] = %08x\n",out_channel * simd + isimd,bias_data[out_channel * simd + isimd]);
               }
               //printf("acc+bias: %d\n", acc);
               // if (fPrintOut) {
@@ -552,6 +547,7 @@ inline void ConvAccelSIMD(const ConvParams& params,
 			 output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)], static_cast<uint8>(acc_new) );
 
                 output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] = static_cast<uint8>(acc_new);
+
                 //printf("Out(%d,%d,%d,%d)=%d\n", batch, out_y, out_x, out_channel * simd + isimd, acc_new);
               } else {
                 output_data[Offset(output_shape, batch, out_y, out_x, out_channel)] = static_cast<uint8>(acc_orig);
