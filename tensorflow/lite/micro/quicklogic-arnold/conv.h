@@ -360,6 +360,16 @@ inline void ConvAccelSIMD(const ConvParams& params,
 	 input_data, filter_data, bias_data,output_data);
   printf("                  output_multiplier = %x, shift = %d\n",output_multiplier, output_shift);
   printf("Address of efpga = %08x\n",&efpga->control);
+  printf("Filters\n");
+  for (int i = 0; i < 16; i++) {
+    unsigned int* tmp = (unsigned int*)filter_data;
+    printf(" %08x %c", tmp[i], ((i+1) % 4) ? 0 : 0xa);
+  }
+  printf("Bias\n");
+  for (int i = 0; i < 16; i++) {
+    unsigned int* tmp = (unsigned int*)bias_data;
+    printf(" %08x %c", tmp[i], ((i+1) % 4) ? 0 : 0xa);
+  }
   efpga->width = input_width;
   efpga->height = input_height;
   efpga->channels = input_depth;
@@ -424,7 +434,7 @@ inline void ConvAccelSIMD(const ConvParams& params,
                       // filter_act_min = std::min(filter_act_min, filter_val);
 
                       acc += filter_val * input_val;
-                      printf("fv[%d], iv, acc: %02x, %02x, %02x\n",ifilt, filter_val, input_val, acc);
+                      //printf("fv[%d], iv, acc: %02x, %02x, %02x\n",ifilt, filter_val, input_val, acc);
                     }
                   }
                 }
@@ -434,7 +444,7 @@ inline void ConvAccelSIMD(const ConvParams& params,
                                                 // Scaled so we can move it prior to quant
                                                 // By bringing it earlier, quantization is now linear, not affine
                                                 // NOTE: did add this into bias_data
-		printf("bias[%d] = %08x\n",out_channel * simd + isimd,bias_data[out_channel * simd + isimd]);
+		
               }
               //printf("acc+bias: %d\n", acc);
               // if (fPrintOut) {
@@ -510,8 +520,8 @@ inline void ConvAccelSIMD(const ConvParams& params,
               
               
               if (first < 10) {
-		printf("output_multiplier=%d, shift=%d, \n", output_multiplier, shift);
-                printf("acc=%d, acc_new=%d, acc_orig=%d\n", acc, acc_new, acc_orig);
+		//		printf("output_multiplier=%d, shift=%d, \n", output_multiplier, shift);
+                //printf("acc=%d, acc_new=%d, acc_orig=%d\n", acc, acc_new, acc_orig);
 		first++;
 	      }
               
@@ -543,7 +553,8 @@ inline void ConvAccelSIMD(const ConvParams& params,
               
               if (true) {
 		if (output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] != static_cast<uint8>(acc_new) )
-		  printf("Hardware mismatch act=%02x exp=%02x\n",
+		  printf("Hardware mismatch[%x] act=%02x exp=%02x\n",
+			 Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd),
 			 output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)], static_cast<uint8>(acc_new) );
 
                 output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] = static_cast<uint8>(acc_new);

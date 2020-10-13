@@ -53,7 +53,7 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   //  printf("Attempted to program FLL2 %d Hz\n",prog_fll(2,7400,3));  // 61 MHs
   prog_fll(0,28000,2);  // 402 MHz
   // prog_fll(1,6100,2);  // 402 MHz
-  prog_fll(2,7400,3);  // 402 MHz 
+  prog_fll(2,6100,3);  // 402 MHz 
   
   apb->fpga_clk = 2;
   programFPGA();
