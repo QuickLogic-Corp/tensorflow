@@ -83,12 +83,6 @@ void programFPGA()
       }
       }
     }
-
-    
-    // WRITE in the configuration data into ArcticPro 2 eFPGA through Configuration Controller for APB
-    //for ( i=0; i < tot_word_cnt; i++ ) {
-    //  FCBAPB_RW_DATA_PORT = 1; //fb_cfg_data[i]; // 32-bit register
-    //}
     FCBAPB_FB_CFG_DONE = 1; // in APB mode, this needs to be explicitly written at end of configuration
 
 

@@ -14,6 +14,7 @@ int prog_fll(int fll, int mult, int div) {
   int mult_out;
   int ret = (REFCLK * (mult+1))/spow2(div?div-1:0);
   int i;
+
   i = 0x80000000 | 
     (div << 26) | (0xf0 << 16) | mult; // 2x RefClock enable FLL
   switch (fll) {

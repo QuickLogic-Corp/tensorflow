@@ -173,7 +173,7 @@ void EvalQuantized(TfLiteContext* context, TfLiteNode* node,
                    const TfLiteTensor* input, const TfLiteTensor* filter,
                    const TfLiteTensor* bias, TfLiteTensor* im2col,
                    TfLiteTensor* hwcn_weights, TfLiteTensor* output) {
-
+  printf("EvalQuantized()\n");
   const int32_t input_offset = -input->params.zero_point; 
   const int32_t filter_offset = -filter->params.zero_point;
   const int32_t output_offset = output->params.zero_point;  
@@ -202,12 +202,12 @@ void EvalQuantized(TfLiteContext* context, TfLiteNode* node,
                       GetTensorData<uint8_t>(im2col), nullptr);
 }
 
-void EvalQuantizedAccelSIMD(TfLiteContext* context, TfLiteNode* node,
+void EvalQuantizedAccel(TfLiteContext* context, TfLiteNode* node,
                    TfLiteConvParams* params, const OpData& data,
                    const TfLiteTensor* input, const TfLiteTensor* filter,
                    const TfLiteTensor* bias, TfLiteTensor* im2col,
-                   TfLiteTensor* hwcn_weights, TfLiteTensor* output, bool fPrintOut) {
-
+                   TfLiteTensor* hwcn_weights, TfLiteTensor* output, bool fLimitCoeffs, bool fSimplifyQuant, bool fPrintOut) {
+  printf("EvalQuantizedAccel()\n");
   const int32_t input_offset = -input->params.zero_point; 
   const int32_t filter_offset = -filter->params.zero_point;
   const int32_t output_offset = output->params.zero_point;  
@@ -223,18 +223,17 @@ void EvalQuantizedAccelSIMD(TfLiteContext* context, TfLiteNode* node,
   op_params.dilation_height_factor = params->dilation_height_factor;
   op_params.input_offset = input_offset;
   op_params.weights_offset = filter_offset;
-  op_params.output_offset = output_offset;  // Hijacked as limit in quant
+  op_params.output_offset = output_offset;
   op_params.output_multiplier = data.output_multiplier;
   op_params.output_shift = -data.output_shift;
   op_params.quantized_activation_min = data.output_activation_min;
   op_params.quantized_activation_max = data.output_activation_max;
-  reference_ops::ConvAccelSIMD(op_params, 
-                      GetTensorShape(input), GetTensorData<uint8_t>(input), 
-                      GetTensorShape(filter), GetTensorData<int8_t>(filter), 
-                      GetTensorShape(bias), GetTensorData<int32_t>(bias), 
-                      GetTensorShape(output), GetTensorData<uint8_t>(output), 
-                      GetTensorShape(im2col), GetTensorData<uint8_t>(im2col), 
-                      nullptr, fPrintOut);
+  reference_ops::ConvAccel(op_params, GetTensorShape(input),
+                      GetTensorData<uint8_t>(input), GetTensorShape(filter),
+                      GetTensorData<uint8_t>(filter), GetTensorShape(bias),
+                      GetTensorData<int32_t>(bias), GetTensorShape(output),
+                      GetTensorData<uint8_t>(output), GetTensorShape(im2col),
+                      GetTensorData<uint8_t>(im2col), nullptr, fLimitCoeffs, fSimplifyQuant, fPrintOut);
 }
 
 void EvalQuantizedPerChannel(TfLiteContext* context, TfLiteNode* node,
@@ -304,7 +303,7 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
   TFLITE_DCHECK(node->user_data != nullptr);
   const OpData& data = *(static_cast<const OpData*>(node->user_data));
 
-// printf("input->type = %d\n", input->type);
+printf("input->type = %d\n", input->type);
   switch (input->type & 0xFF) {  // Already know in/out types are same.
     case kTfLiteFloat32:
       EvalFloat(context, node, params, data, input, filter, bias, nullptr,
@@ -315,12 +314,14 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
                               output, nullptr);
       break;
     case kTfLiteUInt8:
-      if (node->custom_initial_data_size == 0) {
+      if ((input->type & ~0xFF) == 0) {
+        printf("kTfLiteUInt8\n");
         EvalQuantized(context, node, params, data, input, filter, bias, nullptr,
                       nullptr, output);
       } else {
-        EvalQuantizedAccelSIMD(context, node, params, data, input, filter, bias, nullptr,
-                      nullptr, output, (node->custom_initial_data_size & 0x2) ? true : false);
+        printf("0xX00+kTfLiteUInt8\n");
+        EvalQuantizedAccel(context, node, params, data, input, filter, bias, nullptr,
+                      nullptr, output, (input->type & 0x100) ? true : false, (input->type & 0x200) ? true : false, (input->type & 0x400) ? true : false);
       }
       break;
     default:
