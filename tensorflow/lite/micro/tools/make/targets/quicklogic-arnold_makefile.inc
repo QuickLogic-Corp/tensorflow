@@ -4,7 +4,7 @@ ifeq ($(TARGET), quicklogic-arnold)
   TARGET_TOOLCHAIN_ROOT := /opt/riscv/bin/
   TARGET_TOOLCHAIN_PREFIX := riscv32-unknown-elf-
   # change PULP_BUILDER to be the location where pulp-builder is 
-  PULP_BUILDER = /home/gregmartin/ETH/TRY4/arnold-sdk/pulp-builder
+  PULP_BUILDER = ${PULP_SDK_HOME}
 
   PLATFORM_FLAGS = -D__riscv__z
   PLATFORM_FLAGS += -march=rv32imfcxpulpv2 
@@ -29,12 +29,13 @@ ifeq ($(TARGET), quicklogic-arnold)
   CXXFLAGS += -I${PULP_BUILDER}/install/include
   CXXFLAGS += -I${PULP_BUILDER}/hal/include
   CXXFLAGS += -I${PULP_BUILDER}/archi/include
+  CXXFLAGS += -I${PULP_BUILDER}/install/include/archi/chips/arnold
   
   CCFLAGS += $(PLATFORM_FLAGS)
   CCFLAGS += --std=gnu99
-  CCFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/install/include
-  CCFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/hal/include
-  CCFLAGS += -I/home/gregmartin/ETH/TRY2/pulp-builder/archi/include
+  CCFLAGS += -I${PULP_BUILDER}/install/include
+  CCFLAGS += -I${PULP_BUILDER}/hal/include
+  CCFLAGS += -I${PULP_BUILDER}/archi/include
 
   BUILD_TYPE := micro
 
