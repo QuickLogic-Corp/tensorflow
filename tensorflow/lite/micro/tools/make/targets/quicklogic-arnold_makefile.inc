@@ -44,11 +44,12 @@ ifeq ($(TARGET), quicklogic-arnold)
 	-I${PULP_BUILDER}/install/include
 
 
-  SRCS += tensorflow/lite/micro/quicklogic-arnold/fll.cc
-  SRCS += tensorflow/lite/micro/quicklogic-arnold/gpio.cc
-  SRCS += tensorflow/lite/micro/quicklogic-arnold/programFPGA.cc
-    SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_conf.c
-        SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_pad_conf.c
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/conv-simd.cc
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/fll.cc
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/gpio.cc
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/programFPGA.cc
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_conf.c
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_pad_conf.c
 
   MICROLITE_CC_SRCS += $(SRCS)
 
