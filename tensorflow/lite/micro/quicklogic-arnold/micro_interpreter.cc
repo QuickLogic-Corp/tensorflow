@@ -97,7 +97,8 @@ namespace tflite {
         
         printf("converting\n");
         // HACK -- Set custom_initial_data_size non-zero to indicate prepared for Accel
-        node->custom_initial_data_size = accel_active; // | accel_print;
+        node->custom_initial_data_size = accel_sw; // | accel_print;
+		//node->custom_initial_data_size = accel_fpga; // | accel_print;
         
         // Convert filter coeffs to int8
         //  * subtract zero_point (coverts for uint8 to int9 or therebouts)

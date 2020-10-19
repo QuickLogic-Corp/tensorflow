@@ -29,7 +29,15 @@ limitations under the License.
 
 
 namespace tflite {
-void ConvAccelSIMD(const ConvParams& params, 
+void ConvSW_SIMD(const ConvParams& params, 
+			  const RuntimeShape& input_shape, const uint8* input_data, 
+			  const RuntimeShape& filter_shape, const int8_t* filter_data, 
+			  const RuntimeShape& bias_shape, const int32* bias_data, 
+			  const RuntimeShape& output_shape, uint8* output_data, 
+			  const RuntimeShape& im2col_shape, uint8* im2col_data, 
+			  void* cpu_backend_context,
+			  bool fPrint);
+void ConvFPGA_SIMD(const ConvParams& params, 
 			  const RuntimeShape& input_shape, const uint8* input_data, 
 			  const RuntimeShape& filter_shape, const int8_t* filter_data, 
 			  const RuntimeShape& bias_shape, const int32* bias_data, 
@@ -214,7 +222,7 @@ void EvalQuantized(TfLiteContext* context, TfLiteNode* node,
                       GetTensorData<uint8_t>(im2col), nullptr);
 }
 
-void EvalQuantizedAccelSIMD(TfLiteContext* context, TfLiteNode* node,
+void EvalQuantizedSW_SIMD(TfLiteContext* context, TfLiteNode* node,
                    TfLiteConvParams* params, const OpData& data,
                    const TfLiteTensor* input, const TfLiteTensor* filter,
                    const TfLiteTensor* bias, TfLiteTensor* im2col,
@@ -240,7 +248,42 @@ void EvalQuantizedAccelSIMD(TfLiteContext* context, TfLiteNode* node,
   op_params.output_shift = -data.output_shift;
   op_params.quantized_activation_min = data.output_activation_min;
   op_params.quantized_activation_max = data.output_activation_max;
-  ConvAccelSIMD(op_params, 
+  ConvSW_SIMD(op_params, 
+                      GetTensorShape(input), GetTensorData<uint8_t>(input), 
+                      GetTensorShape(filter), GetTensorData<int8_t>(filter), 
+                      GetTensorShape(bias), GetTensorData<int32_t>(bias), 
+                      GetTensorShape(output), GetTensorData<uint8_t>(output), 
+                      GetTensorShape(im2col), GetTensorData<uint8_t>(im2col), 
+                      nullptr, fPrintOut);
+}
+
+void EvalQuantizedFPGA_SIMD(TfLiteContext* context, TfLiteNode* node,
+                   TfLiteConvParams* params, const OpData& data,
+                   const TfLiteTensor* input, const TfLiteTensor* filter,
+                   const TfLiteTensor* bias, TfLiteTensor* im2col,
+                   TfLiteTensor* hwcn_weights, TfLiteTensor* output, bool fPrintOut) {
+
+  const int32_t input_offset = -input->params.zero_point; 
+  const int32_t filter_offset = -filter->params.zero_point;
+  const int32_t output_offset = output->params.zero_point;  
+
+  // TODO(b/154032858): Investigate removing extra copies.
+  ConvParams op_params;
+  op_params.padding_type = RuntimePaddingType(params->padding);
+  op_params.padding_values.width = data.padding.width;
+  op_params.padding_values.height = data.padding.height;
+  op_params.stride_width = params->stride_width;
+  op_params.stride_height = params->stride_height;
+  op_params.dilation_width_factor = params->dilation_width_factor;
+  op_params.dilation_height_factor = params->dilation_height_factor;
+  op_params.input_offset = input_offset;
+  op_params.weights_offset = filter_offset;
+  op_params.output_offset = output_offset;  // Hijacked as limit in quant
+  op_params.output_multiplier = data.output_multiplier;
+  op_params.output_shift = -data.output_shift;
+  op_params.quantized_activation_min = data.output_activation_min;
+  op_params.quantized_activation_max = data.output_activation_max;
+  ConvFPGA_SIMD(op_params, 
                       GetTensorShape(input), GetTensorData<uint8_t>(input), 
                       GetTensorShape(filter), GetTensorData<int8_t>(filter), 
                       GetTensorShape(bias), GetTensorData<int32_t>(bias), 
@@ -331,10 +374,15 @@ TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
       if (node->custom_initial_data_size == 0) {
         EvalQuantized(context, node, params, data, input, filter, bias, nullptr,
                       nullptr, output);
-      } else {
-        EvalQuantizedAccelSIMD(context, node, params, data, input, filter, bias, nullptr,
+      } else if (node->custom_initial_data_size & accel_sw) {
+        EvalQuantizedSW_SIMD(context, node, params, data, input, filter, bias, nullptr,
                       nullptr, output, (node->custom_initial_data_size & accel_print) ? true : false);
-      }
+      } else if (node->custom_initial_data_size & accel_fpga) {
+        EvalQuantizedFPGA_SIMD(context, node, params, data, input, filter, bias, nullptr,
+                      nullptr, output, (node->custom_initial_data_size & accel_print) ? true : false);
+      } else {
+		  printf("ERROR: Unknown accel type = 0x%x\n", node->custom_initial_data_size);
+	  }
       break;
     default:
       TF_LITE_KERNEL_LOG(context, "Type %s (%d) not supported.",
