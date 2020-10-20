@@ -29,6 +29,7 @@ limitations under the License.
 
 #include "fll.h"
 #include "gpio.h"
+#define USE_UART
 #undef USE_UART
 #include "arnold_apb_ctl.h"
 #include "apb_conv2d.h"
@@ -38,6 +39,7 @@ unsigned int __rt_iodev = 1;
 unsigned int __rt_iodev_uart_baudrate = 115200;
 unsigned int __rt_iodev_uart_channel = 0;
 #endif
+bool fpga_programmed;
 // Create an area of memory to use for input, output, and intermediate arrays.
 constexpr int tensor_arena_size = 93 * 1024;
 uint8_t tensor_arena[tensor_arena_size] __attribute__ ((aligned (16)));
@@ -54,12 +56,24 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   //  printf("Attempted to program FLL2 %d Hz\n",prog_fll(2,7400,3));  // 61 MHs
   prog_fll(0,20000,2);  // 326 MHz  got 456 in 2 steps/
   prog_fll(0,28000,2);  // 456 MHz
-  // prog_fll(1,6100,2);  // 50 MHz
-  prog_fll(2,6100,3);  // 50 MHz 
+  //   prog_fll(1,6100,2);  // 50 MHz
+    prog_fll(2,2000,2);  // 50 MHz
+
   
   apb->fpga_clk = 2;
+  fpga_programmed = false;
 #ifdef USE_UART
   programFPGA("tfl");
+  fpga_programmed = true;
+    printf ("fll0 = %d, fll1 = %d, fll2= %d\n",
+	  *(unsigned int*)0x1a100000,
+	  *(unsigned int*)0x1a100010,
+	  *(unsigned int*)0x1a100020);
+  printf ("0 = %x, 1 = %x, 2= %x\n",
+	  *(unsigned int*)0x1a100004,
+	  *(unsigned int*)0x1a100014,
+	  *(unsigned int*)0x1a100024);
+
 #endif
   apb->fpga_reset = 1;
   apb->fpga_reset = 0xF;

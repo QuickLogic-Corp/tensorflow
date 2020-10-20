@@ -45,7 +45,7 @@ void ConvSW_SIMD(const ConvParams& params,
                   const RuntimeShape& im2col_shape, uint8* im2col_data, 
                   void* cpu_backend_context,
                   bool fPrint) {
-  printf("ConvAccelSIMD\n");
+  printf("ConvSW_SIMD\n");
   
   int32_t iprintcol;
   if (fPrint) {
@@ -163,6 +163,9 @@ void ConvSW_SIMD(const ConvParams& params,
   }
 }
 
+#include "arnold_apb_ctl.h"
+#include "apb_conv2d.h"
+
 void ConvFPGA_SIMD(const ConvParams& params, 
                   const RuntimeShape& input_shape, const uint8* input_data, 
                   const RuntimeShape& filter_shape, const int8_t* filter_data, 
@@ -171,7 +174,7 @@ void ConvFPGA_SIMD(const ConvParams& params,
                   const RuntimeShape& im2col_shape, uint8* im2col_data, 
                   void* cpu_backend_context,
                   bool fPrint) {
-  printf("ConvAccelSIMD\n");
+  printf("ConvFPGA_SIMD\n");
   
   int32_t iprintcol;
   if (fPrint) {
@@ -221,7 +224,46 @@ void ConvFPGA_SIMD(const ConvParams& params,
   const int simd = {8};
   printf("batches=%d\n", batches);
   printf("output_depth=%d\n", output_depth);
+  printf("Calling FPGA with width = %d, height = %d, channels = %d, filters_h = %d, filter_w = %d\n",
+	 input_width, input_height, output_depth, filter_height, filter_width );
+  printf("                  input_depth = %d\n", input_depth);
+  printf("                  &pixel = %08x, &filter = %08x, &bias = %08x &result = %08x\n",
+	 input_data, filter_data, bias_data,output_data);
+  printf("                  output_multiplier = %x, shift = %d\n",output_multiplier, output_shift);
+
+
+    apb->fpga_reset = 0;
+  apb->fpga_reset = 0xF;
   
+  //  apb->fpga_gate  = 0xFFFF;
+
+
+  
+  efpga->width = input_width;
+  efpga->height = input_height;
+  efpga->channels = input_depth;
+  efpga->filters = output_depth*8;
+  efpga->total_pixels = efpga->width*efpga->height;
+  efpga->pixel_base = (volatile unsigned int*) input_data;
+  efpga->filter_base = (volatile unsigned int*) filter_data;
+  efpga->bias_base = (volatile unsigned int*) bias_data;
+  efpga->result_base = (volatile unsigned int*) output_data;
+  efpga->quant = (-output_shift << 16) | output_multiplier;
+  printf("Width = %d\n", efpga->width);
+  printf("Height = %d\n", efpga->height);
+  printf("Channels = %d\n", efpga->channels);
+  printf("Filters = %d\n", efpga->filters);
+  printf("Quant = %x\n", efpga->quant);
+  
+  printf("Total_pixels = %d\n", efpga->total_pixels);
+  printf("Pixel_base   = 0x%05x (0x%08x)\n", efpga->pixel_base,input_data);
+  printf("Filter_base  = 0x%05x (0x%08x)\n", efpga->filter_base,filter_data);
+  printf("Bias_base    = 0x%05x (0x%08x)\n", efpga->bias_base, bias_data);
+  printf("Result_base  = 0x%05x (0x%08x)\n", efpga->result_base, output_data);
+  efpga->control = 1;
+  while (efpga->control & 1) {}
+  printf ("Elapsed Clocks = %d \n",efpga->clocks);//- elapsed_clocks);
+
   for (int batch = 0; batch < batches; ++batch) {
     
       for (int out_y = 0; out_y < output_height; ++out_y) {
@@ -271,8 +313,15 @@ void ConvFPGA_SIMD(const ConvParams& params,
               
               acc_new = std::max(acc_new, output_activation_min);
               acc_new = std::min(acc_new, output_activation_max);
+	      if (output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] != static_cast<uint8>(acc_new) ) {
+		  printf("Hardware mismatch[%x] act=%02x exp=%02x\n",
+			 Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd),
+			 output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)],
+			 static_cast<uint8>(acc_new) );
+
               
-                output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] = static_cast<uint8>(acc_new);
+		  output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] = static_cast<uint8>(acc_new);
+	      }
               if (fPrint) {
                 printf("0x%08x, %d%s", acc, acc_new, (iprintcol == 7) ? ",\n  " : ", ");
                 iprintcol++;

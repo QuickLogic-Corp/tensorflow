@@ -30,7 +30,7 @@ limitations under the License.
 #include "tensorflow/lite/c/builtin_op_data.h"
 
 #include "accel.h"
-
+extern bool fpga_programmed;
 struct OpData {
   TfLitePaddingValues padding;
   // The scaling factor from input to output (aka the 'real multiplier') can
@@ -97,8 +97,11 @@ namespace tflite {
         
         printf("converting\n");
         // HACK -- Set custom_initial_data_size non-zero to indicate prepared for Accel
+	if ((i < 14) && fpga_programmed) // only accelerate the first 6 convolutions
+	node->custom_initial_data_size = accel_fpga; // | accel_print;
+	else
         node->custom_initial_data_size = accel_sw; // | accel_print;
-		//node->custom_initial_data_size = accel_fpga; // | accel_print;
+
         
         // Convert filter coeffs to int8
         //  * subtract zero_point (coverts for uint8 to int9 or therebouts)
