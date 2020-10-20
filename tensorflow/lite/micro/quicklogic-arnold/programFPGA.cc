@@ -1,4 +1,3 @@
-
 #define PULP_CHIP_STR arnold
 #include "fc_config.h"
 #define ARCHI_EU_ADDR 0x00020800
@@ -12,7 +11,7 @@ extern "C" {
 #include "programFPGA.h"
 #include "apb_fcb.h"
 //#include "fourbyte.h"
-void programFPGA()
+void programFPGA (const char *design)
 {
 
     int bit_line_count  = 172; // 0x00ac
@@ -59,7 +58,8 @@ void programFPGA()
 
     {
       extern int __rt_nb_devices;
-      char rx_buffer[] = "LoAd tfl \n      ";
+      char rx_buffer[20];
+      sprintf(rx_buffer,"LoAd %s\n",design);
       rt_event_alloc(NULL,4);
       rt_uart_conf_t conf;
       rt_uart_conf_init(&conf);

@@ -29,14 +29,15 @@ limitations under the License.
 
 #include "fll.h"
 #include "gpio.h"
-//#include "programFPGA.h"
+#undef USE_UART
 #include "arnold_apb_ctl.h"
 #include "apb_conv2d.h"
-/*
+#ifdef USE_UART
+#include "programFPGA.h"
 unsigned int __rt_iodev = 1;
 unsigned int __rt_iodev_uart_baudrate = 115200;
 unsigned int __rt_iodev_uart_channel = 0;
-*/
+#endif
 // Create an area of memory to use for input, output, and intermediate arrays.
 constexpr int tensor_arena_size = 93 * 1024;
 uint8_t tensor_arena[tensor_arena_size] __attribute__ ((aligned (16)));
@@ -57,7 +58,9 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   prog_fll(2,6100,3);  // 50 MHz 
   
   apb->fpga_clk = 2;
-  //programFPGA();
+#ifdef USE_UART
+  programFPGA("tfl");
+#endif
   apb->fpga_reset = 1;
   apb->fpga_reset = 0xF;
   apb->fpga_gate  = 0xFFFF;
