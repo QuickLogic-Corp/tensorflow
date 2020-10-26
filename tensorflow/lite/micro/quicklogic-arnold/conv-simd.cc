@@ -224,21 +224,13 @@ void ConvFPGA_SIMD(const ConvParams& params,
   const int simd = {8};
   printf("batches=%d\n", batches);
   printf("output_depth=%d\n", output_depth);
-  printf("Calling FPGA with width = %d, height = %d, channels = %d, filters_h = %d, filter_w = %d\n",
+  printf("Calling FPGA with w = %d, h = %d, channels = %d, filters_h = %d, filter_w = %d\n",
 	 input_width, input_height, output_depth, filter_height, filter_width );
-  printf("                  input_depth = %d\n", input_depth);
-  printf("                  &pixel = %08x, &filter = %08x, &bias = %08x &result = %08x\n",
+  printf("      input_depth = %d\n", input_depth);
+  printf("      &pixel = %08x, &filter = %08x, &bias = %08x &result = %08x\n",
 	 input_data, filter_data, bias_data,output_data);
-  printf("                  output_multiplier = %x, shift = %d\n",output_multiplier, output_shift);
+  printf("      output_multiplier = %x, shift = %d\n",output_multiplier, output_shift);
 
-
-    apb->fpga_reset = 0;
-  apb->fpga_reset = 0xF;
-  
-  //  apb->fpga_gate  = 0xFFFF;
-
-
-  
   efpga->width = input_width;
   efpga->height = input_height;
   efpga->channels = input_depth;
@@ -320,7 +312,7 @@ void ConvFPGA_SIMD(const ConvParams& params,
 			 static_cast<uint8>(acc_new) );
 
               
-		  output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] = static_cast<uint8>(acc_new);
+		  //		  output_data[Offset(output_shape, batch, out_y, out_x, out_channel * simd + isimd)] = static_cast<uint8>(acc_new);
 	      }
               if (fPrint) {
                 printf("0x%08x, %d%s", acc, acc_new, (iprintcol == 7) ? ",\n  " : ", ");

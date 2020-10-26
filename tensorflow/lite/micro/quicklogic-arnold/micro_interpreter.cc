@@ -97,7 +97,7 @@ namespace tflite {
         
         printf("converting\n");
         // HACK -- Set custom_initial_data_size non-zero to indicate prepared for Accel
-	if ((i < 14) && fpga_programmed) // only accelerate the first 6 convolutions
+	if ( (i < 16)  && fpga_programmed) // only accelerate if fpga is programmmed
 	node->custom_initial_data_size = accel_fpga; // | accel_print;
 	else
         node->custom_initial_data_size = accel_sw; // | accel_print;
