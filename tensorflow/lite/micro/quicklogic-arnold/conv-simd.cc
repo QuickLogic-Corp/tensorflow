@@ -30,6 +30,7 @@ limitations under the License.
 #include "tensorflow/lite/kernels/internal/types.h"
 #include "tensorflow/lite/kernels/internal/common.h"
 
+#include "arnold_apb_ctl.h"
 
 
 namespace tflite {
@@ -95,6 +96,7 @@ void ConvSW_SIMD(const ConvParams& params,
   const int simd = {8};
   printf("batches=%d\n", batches);
   printf("output_depth=%d\n", output_depth);
+  gpio->set31_00 = (1 << 5); // gpio 5 set for timing
   
   for (int batch = 0; batch < batches; ++batch) {
     
@@ -158,12 +160,13 @@ void ConvSW_SIMD(const ConvParams& params,
       }
    
   }
+  gpio->out31_00 = 0; // gpio 5 clear
   if (fPrint) {
     printf("\n};\n");
   }
 }
 
-#include "arnold_apb_ctl.h"
+
 #include "apb_conv2d.h"
 
 void ConvFPGA_SIMD(const ConvParams& params, 
@@ -222,6 +225,7 @@ void ConvFPGA_SIMD(const ConvParams& params,
   int32 acc_new;
   
   const int simd = {8};
+  
   printf("batches=%d\n", batches);
   printf("output_depth=%d\n", output_depth);
   printf("Calling FPGA with w = %d, h = %d, channels = %d, filters_h = %d, filter_w = %d\n",
@@ -246,7 +250,8 @@ void ConvFPGA_SIMD(const ConvParams& params,
   printf("Channels = %d\n", efpga->channels);
   printf("Filters = %d\n", efpga->filters);
   printf("Quant = %x\n", efpga->quant);
-  
+
+  int quant = efpga->quant;
   printf("Total_pixels = %d\n", efpga->total_pixels);
   printf("Pixel_base   = 0x%05x (0x%08x)\n", efpga->pixel_base,input_data);
   printf("Filter_base  = 0x%05x (0x%08x)\n", efpga->filter_base,filter_data);
@@ -255,7 +260,7 @@ void ConvFPGA_SIMD(const ConvParams& params,
   efpga->control = 1;
   while (efpga->control & 1) {}
   printf ("Elapsed Clocks = %d \n",efpga->clocks);//- elapsed_clocks);
-
+  gpio->set31_00 = (1<<5);
   for (int batch = 0; batch < batches; ++batch) {
     
       for (int out_y = 0; out_y < output_height; ++out_y) {
@@ -265,6 +270,15 @@ void ConvFPGA_SIMD(const ConvParams& params,
               const int in_x_origin = (out_x * stride_width) - pad_width;
               const int in_y_origin = (out_y * stride_height) - pad_height;
               int32_t acc = 0;
+	      if (bias_data) {
+                acc += bias_data[out_channel * simd + isimd];  // Includes output_offset
+                                                // Scaled so we can move it prior to quant
+                                                // By bringing it earlier, quantization is now linear, not affine
+                                                // NOTE: did add this into bias_data
+              }
+	      if (quant == 0x16253) {
+		//		printf("***Bias = %06x *****\n",acc & 0xFFFFFF);
+	      }
               for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
                 for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
                   for (int in_channel = 0; in_channel < input_depth; ++in_channel) {
@@ -285,15 +299,12 @@ void ConvFPGA_SIMD(const ConvParams& params,
                       input_val = input_val - 128;
 
                       acc += filter_val * input_val;
+		      if (quant == 0x16253) {
+			//			printf("f=%02x * i=%02x == %06x\n",filter_val  & 0xff, input_val & 0xff, acc&0xffffff);
+		      }
                     }
                   }
                 }
-              }
-              if (bias_data) {
-                acc += bias_data[out_channel * simd + isimd];  // Includes output_offset
-                                                // Scaled so we can move it prior to quant
-                                                // By bringing it earlier, quantization is now linear, not affine
-                                                // NOTE: did add this into bias_data
               }
               
               int shift = -output_shift;
@@ -325,12 +336,14 @@ void ConvFPGA_SIMD(const ConvParams& params,
       }
    
   }
+  //  gpio->clear31_00 = (1<<5);
+    gpio->out31_00 = 0;
   if (fPrint) {
     printf("\n};\n");
   }
 }
+  
 
-
-//}  // namespace reference_ops
+  //}  // namespace reference_ops
 }  // namespace tflite
 
