@@ -46,7 +46,8 @@ void ConvSW_SIMD(const ConvParams& params,
                   const RuntimeShape& im2col_shape, uint8* im2col_data, 
                   void* cpu_backend_context,
                   bool fPrint) {
-  printf("ConvSW_SIMD\n");
+  if (fPrint)
+    printf("ConvSW_SIMD\n");
   
   int32_t iprintcol;
   if (fPrint) {
@@ -94,8 +95,10 @@ void ConvSW_SIMD(const ConvParams& params,
   int32 acc_new;
   
   const int simd = {8};
-  printf("batches=%d\n", batches);
-  printf("output_depth=%d\n", output_depth);
+  if (fPrint) {
+    printf("batches=%d\n", batches);
+    printf("output_depth=%d\n", output_depth);
+  }
   gpio->set31_00 = (1 << 5); // gpio 5 set for timing
   
   for (int batch = 0; batch < batches; ++batch) {
@@ -160,7 +163,7 @@ void ConvSW_SIMD(const ConvParams& params,
       }
    
   }
-  gpio->out31_00 = 0; // gpio 5 clear
+  gpio->clear31_00 = ~(1<<5); // gpio 5 clear
   if (fPrint) {
     printf("\n};\n");
   }
@@ -177,7 +180,8 @@ void ConvFPGA_SIMD(const ConvParams& params,
                   const RuntimeShape& im2col_shape, uint8* im2col_data, 
                   void* cpu_backend_context,
                   bool fPrint) {
-  printf("ConvFPGA_SIMD\n");
+  if (fPrint)
+    printf("ConvFPGA_SIMD\n");
   
   int32_t iprintcol;
   if (fPrint) {
@@ -223,17 +227,18 @@ void ConvFPGA_SIMD(const ConvParams& params,
 
   int32 acc_orig;
   int32 acc_new;
-  
+  const int  verify=false; 
   const int simd = {8};
-  
-  printf("batches=%d\n", batches);
-  printf("output_depth=%d\n", output_depth);
-  printf("Calling FPGA with w = %d, h = %d, channels = %d, filters_h = %d, filter_w = %d\n",
-	 input_width, input_height, output_depth, filter_height, filter_width );
-  printf("      input_depth = %d\n", input_depth);
-  printf("      &pixel = %08x, &filter = %08x, &bias = %08x &result = %08x\n",
-	 input_data, filter_data, bias_data,output_data);
-  printf("      output_multiplier = %x, shift = %d\n",output_multiplier, output_shift);
+  if (fPrint) {
+    printf("batches=%d\n", batches);
+    printf("output_depth=%d\n", output_depth);
+    printf("Calling FPGA with w = %d, h = %d, channels = %d, filters_h = %d, filter_w = %d\n",
+	   input_width, input_height, output_depth, filter_height, filter_width );
+    printf("      input_depth = %d\n", input_depth);
+    printf("      &pixel = %08x, &filter = %08x, &bias = %08x &result = %08x\n",
+	   input_data, filter_data, bias_data,output_data);
+    printf("      output_multiplier = %x, shift = %d\n",output_multiplier, output_shift);
+  }
 
   efpga->width = input_width;
   efpga->height = input_height;
@@ -245,21 +250,26 @@ void ConvFPGA_SIMD(const ConvParams& params,
   efpga->bias_base = (volatile unsigned int*) bias_data;
   efpga->result_base = (volatile unsigned int*) output_data;
   efpga->quant = (-output_shift << 16) | output_multiplier;
-  printf("Width = %d\n", efpga->width);
-  printf("Height = %d\n", efpga->height);
-  printf("Channels = %d\n", efpga->channels);
-  printf("Filters = %d\n", efpga->filters);
-  printf("Quant = %x\n", efpga->quant);
+  if (fPrint) {
+    printf("Width = %d\n", efpga->width);
+    printf("Height = %d\n", efpga->height);
+    printf("Channels = %d\n", efpga->channels);
+    printf("Filters = %d\n", efpga->filters);
+    printf("Quant = %x\n", efpga->quant);
+  }
 
   int quant = efpga->quant;
-  printf("Total_pixels = %d\n", efpga->total_pixels);
-  printf("Pixel_base   = 0x%05x (0x%08x)\n", efpga->pixel_base,input_data);
-  printf("Filter_base  = 0x%05x (0x%08x)\n", efpga->filter_base,filter_data);
-  printf("Bias_base    = 0x%05x (0x%08x)\n", efpga->bias_base, bias_data);
-  printf("Result_base  = 0x%05x (0x%08x)\n", efpga->result_base, output_data);
+  if (fPrint) {
+    printf("Total_pixels = %d\n", efpga->total_pixels);
+    printf("Pixel_base   = 0x%05x (0x%08x)\n", efpga->pixel_base,input_data);
+    printf("Filter_base  = 0x%05x (0x%08x)\n", efpga->filter_base,filter_data);
+    printf("Bias_base    = 0x%05x (0x%08x)\n", efpga->bias_base, bias_data);
+    printf("Result_base  = 0x%05x (0x%08x)\n", efpga->result_base, output_data);
+  }
   efpga->control = 1;
   while (efpga->control & 1) {}
-  printf ("Elapsed Clocks = %d \n",efpga->clocks);//- elapsed_clocks);
+  //  printf ("Elapsed Clocks = %d \n",efpga->clocks);//- elapsed_clocks);
+  if (verify) {
   gpio->set31_00 = (1<<5);
   for (int batch = 0; batch < batches; ++batch) {
     
@@ -276,9 +286,6 @@ void ConvFPGA_SIMD(const ConvParams& params,
                                                 // By bringing it earlier, quantization is now linear, not affine
                                                 // NOTE: did add this into bias_data
               }
-	      if (quant == 0x16253) {
-		//		printf("***Bias = %06x *****\n",acc & 0xFFFFFF);
-	      }
               for (int filter_y = 0; filter_y < filter_height; ++filter_y) {
                 for (int filter_x = 0; filter_x < filter_width; ++filter_x) {
                   for (int in_channel = 0; in_channel < input_depth; ++in_channel) {
@@ -337,7 +344,8 @@ void ConvFPGA_SIMD(const ConvParams& params,
    
   }
   //  gpio->clear31_00 = (1<<5);
-    gpio->out31_00 = 0;
+  gpio->clear31_00 = ~(1<<5);
+  } // end verify
   if (fPrint) {
     printf("\n};\n");
   }

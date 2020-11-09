@@ -77,7 +77,7 @@ namespace tflite {
         // Get shape of filter and process iff it is accelerator compatible
         int itensor = node->inputs->data[1];
         TfLiteTensor* filter = &context->tensors[itensor];
-        printf("Considering tensor[%d], node[%d] for accel...", itensor, i);
+	printf("Considering tensor[%d], node[%d] for accel...", itensor, i);
         if (filter->dims->size != 4) {
           printf("skipping because filter not 4D\n");
           break;
@@ -529,9 +529,8 @@ TfLiteStatus MicroInterpreter::Invoke() {
 
 
   for (size_t i = 0; i < subgraph_->operators()->size(); ++i) {
-    printf("Working on node[%d]\n", i);
     bool fPrintData = false;
-    
+    if (fPrintData) printf("Working on node[%d]\n", i);    
     auto* node = &(node_and_registrations_[i].node);
 
     

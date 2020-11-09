@@ -55,14 +55,13 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   //  printf("Attempted to program FLL1 %d Hz\n",prog_fll(1,6100,3));   //50 MHz
   //  printf("Attempted to program FLL2 %d Hz\n",prog_fll(2,7400,3));  // 61 MHs
 
-  apb->padfunc0 = 0xaaa826aa;  // UART(7,8), gpio(5), fpga (0-4, 6, 19-15)
-  gpio->dir31_00 = gpio->dir31_00 | (1 << 5);  // gpio 5 output
-  gpio->enable31_00 = gpio->enable31_00 | (1 << 5); // gpio output enable
+  apb->padfunc0 = 0xaaa816aa;  // UART(7,8), gpio(5,6), fpga (0-4, 6, 19-15)
+  gpio->dir31_00 = gpio->dir31_00 | (3 << 5);  // gpio 5,6 output
+  gpio->enable31_00 = gpio->enable31_00 | (3 << 5); // gpio output enable
   gpio->out31_00 = 0; // clear all gpio
 
-  prog_fll(0,20000,2);  // 326 MHz  got 456 in 2 steps/
+  prog_fll(0,20000,2);  // 326 MHz  goto 456 in 2 steps/
   prog_fll(0,28000,2);  // 456 MHz
-  
   prog_fll(2,6100,3);  // 50 MHz
 
   
@@ -75,22 +74,7 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   apb->fpga_reset = 1;
   apb->fpga_reset = 0xF;
   apb->fpga_gate  = 0xFFFF;
-  printf("Arnold test bed with gpio\n");
-  int fref = 6;
-  int fout = 480;
-
-  //  padcfg();
-  /*  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(1);
-  prog_fll(0, fref, fout/fref,1);
-  setgpio5(0);
-  prog_fll(0, fref, fout/fref,1);
-  */
+  printf("Arnold GPIO 5,6= software, GPIO 0 = hardware\n");
 
   // Map the model into a usable data structure. This doesn't involve any
   // copying or parsing, it's a very lightweight operation.
@@ -139,13 +123,9 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   }
 
   // Run the model on this input and make sure it succeeds.
-  setgpio5(0);
-    setgpio5(1);
-      setgpio5(0);
+  gpio->out31_00 = (1<<6);
   TfLiteStatus invoke_status = interpreter.Invoke();
-  setgpio5(0);
-    setgpio5(1);
-      setgpio5(0);
+  gpio->out31_00 = 0;
   if (invoke_status != kTfLiteOk) {
     TF_LITE_REPORT_ERROR(error_reporter, "Invoke failed\n");
   }
@@ -176,11 +156,9 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   }
 
   // Run the model on this "No Person" input
-  setgpio5(1);
-    setgpio5(0);
+  gpio->out31_00 = (1<<6);
   invoke_status = interpreter.Invoke();
-    setgpio5(1);
-  setgpio5(0);
+  gpio->out31_00 = 0;
   if (invoke_status != kTfLiteOk) {
     TF_LITE_REPORT_ERROR(error_reporter, "Invoke failed\n");
   }

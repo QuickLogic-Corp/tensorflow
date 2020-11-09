@@ -1,6 +1,6 @@
-
+#include "fll.h"
 #include <stdio.h>
-#define REFCLK 32660
+
 int spow2 (int exp) {
   int i, ret;
   ret = 1;
@@ -10,108 +10,68 @@ int spow2 (int exp) {
   return ret;
 }
 
-int prog_fll(int fll, int mult, int div) {
+int prog_fll(int f, int mult, int div) {
+  fll_t *fll = (fll_t*)0x1a100000;
   int mult_out;
   int ret = (REFCLK * (mult+1))/spow2(div?div-1:0);
-  int i;
+  fll_reg_cfg1_t i;
+  fll_reg_cfg2_t j;
+  fll_reg_integ_t k;
+  i.mult_factor = mult;
+  i.dco_input = 0xf0;
+  i.clock_out_divider = div;
+  i.output_lock_enable = 0;
+  i.mode = 1;
 
-  i = 0x80000000 | 
-    (div << 26) | (0xf0 << 16) | mult; // 2x RefClock enable FLL
-  switch (fll) {
-  case 0:
-    *(unsigned int*)0x1a100008 = 0x42004107; // select ref clock as input
-    *(unsigned int*)0x1a100004 = i;
-    printf("FLL0 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
-	   *(unsigned int*)0x1a100000,
-	   *(unsigned int*)0x1a100004,
-	   *(unsigned int*)0x1a100008,
-	   *(unsigned int*)0x1a10000C);
-    mult_out = *(unsigned int*)0x1a100000;
-    break;
-  case 1:
-    *(unsigned int*)0x1a100018 = 0x42004107; // select ref clock as input
-    *(unsigned int*)0x1a100014 = i;
-    printf("FLL1=1 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
-	   *(unsigned int*)0x1a100010,
-	   *(unsigned int*)0x1a100014,
-	   *(unsigned int*)0x1a100018,
-	   *(unsigned int*)0x1a10001C);
-        mult_out = *(unsigned int*)0x1a100010;
-    break;
-  case 2:
-    //   *(unsigned int*)0x1a10002C = 0x00808000;
-    *(unsigned int*)0x1a100028 = 0x42004107; // select ref clock as input
-    *(unsigned int*)0x1a100024 = i;
-    printf("FLL2 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
-	   *(unsigned int*)0x1a100020,
-	   *(unsigned int*)0x1a100024,
-	   *(unsigned int*)0x1a100028,
-	   *(unsigned int*)0x1a10002C);
-            mult_out = *(unsigned int*)0x1a100020;
-    break;
-  }
+  //  printf("cfg1 mult=%04x, dco_inp=%03x, div=%d, locken=%d, mode=%d\n",
+  //	 i.mult_factor, i.dco_input, i.clock_out_divider, i.output_lock_enable,
+  //	 i.mode);
+
+  j.loop_gain = 7;
+  j.de_assert_cycles = 6;
+  j.assert_cycles = 0x10;
+  j.lock_tolerance = 0x50;
+  j.config_clock_sel = 1;
+  j.open_loop=0;
+  j.dithering=1;
+//  printf("cfg2 loop gain=%x de_assert=%2x assert=%2x tolerance=%3x clk_sel=%x open_loop=%x,ditering=%x\n",
+//       j.loop_gain, j.de_assert_cycles,
+//	 j.assert_cycles, j.lock_tolerance, j.config_clock_sel,
+//	 j.open_loop, j.dithering);
+  fll[f].cfg2.raw = j.raw;
+  fll[f].cfg1.raw = i.raw;
+  k.raw = fll[f].integ.raw;
+// printf("FLL%d m=%d (%04x), div= %d %04x %08x (0x%x.0x%x)\n",f,
+//	 i.mult_factor,
+//	 i.mult_factor,
+//	 i.clock_out_divider,
+//	 fll[f].stat.act_mult,
+//	 fll[f].cfg1.raw,
+//	 fll[f].cfg2.raw,
+//	 k.state_int_part,k.state_fract_part
+//	 );
   ret  = (REFCLK * (mult_out+1))/spow2(div?div-1:0);
   return ret;
 }
-/*
 
 
-int prog_fll(int fll, int fref, int mult, int div) {
-  int ret = (12 * (mult+1))/spow2(div?(div-1):0);
-  int i;
-  i = 0x80000000 |  // 1 = Normal mode
-      0x40000000 |  // 1 = FLL output gated by LOCK
-      (div << 26) | 
-      (0x180 << 16) | 
-      mult;
-  int uxconfigreg2 =
-        0x00000000 |  // 1 = Dithering enabled
-        0x40000000 |  // 1 = Open-loop-when-locked
-        0x20000000 |  // 1 = REFCLK, 0 = DCOCLK
-        (0x200 << 16) | // lock tolerance
-        (0x10  << 10) | // Stable REFCLK until LOCK assert
-        (0x20  << 4)  | // Unstable REFCLK until LOCK deassert
-        3             ; // -lg(FLL loop gain) ie. 7 => 2^(-7) = 1/256
-  int regStatusI;
-  int regConfigI;
-  int regConfigII;
-  int regIntegrator;
-  switch (fll) {
-  case 0:
-    *(unsigned int*)0x1a100008 = uxconfigreg2; // select ref clock as input
-    *(unsigned int*)0x1a100004 = i;
-    regStatusI = *(unsigned int*)0x1a100000,
-	  regConfigI = *(unsigned int*)0x1a100004,
-	  regConfigII = *(unsigned int*)0x1a100008,
-	  regIntegrator = *(unsigned int*)0x1a10000C;
-    printf("FLL0 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
-	   *(unsigned int*)0x1a100000,
-	   *(unsigned int*)0x1a100004,
-	   *(unsigned int*)0x1a100008,
-	   *(unsigned int*)0x1a10000C);
-    break;
-  case 1:
-    *(unsigned int*)0x1a100018 = uxconfigreg2; // select ref clock as input
-    *(unsigned int*)0x1a100014 = i;
-    printf("FLL1=1 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
-	   *(unsigned int*)0x1a100010,
-	   *(unsigned int*)0x1a100014,
-	   *(unsigned int*)0x1a100018,
-	   *(unsigned int*)0x1a10001C);
-    break;
-  case 2:
-    *(unsigned int*)0x1a10002C = 0x00808000;
-    *(unsigned int*)0x1a100028 = 0x62004100; // select ref clock as input
-    *(unsigned int*)0x1a100024 = i;
-    printf("FLL2 m=%d, div= %d %08x %08x %08x %08x\n",mult,div,
-	   *(unsigned int*)0x1a100020,
-	   *(unsigned int*)0x1a100024,
-	   *(unsigned int*)0x1a100028,
-	   *(unsigned int*)0x1a10002C);
-    break;
-  }
-  printf("FLL%d(m=%d, div=%d)\n", fll, mult, div);
-  printf("StatusI=0x%08x [actual mult=%d, assuming %dMHz => %dMHz\n", regStatusI, regStatusI, fref, fref * regStatusI);
-  return ret;
+
+int dump_fll(int f) {
+  fll_t *fll = (fll_t*)0x1a100000;
+  int div = 	 fll[f].cfg1.clock_out_divider;
+  int mult = 	 fll[f].stat.act_mult;
+  
+  printf("FLL[%d]: Actual Multiplier m=%d (%x) ",f,mult,mult);
+  printf("Div = %d Freq = %d MHz\n",div,
+	 (REFCLK)*mult /
+	 (1000*spow2(div?div-1:0)));
+  printf("        locken=%d, %s gain=%d Dithering %s (0x%x.0x%x)\n",
+	 fll[f].cfg1.output_lock_enable,
+	 fll[f].cfg1.mode ? "normal" : "standalone", 
+	 fll[f].cfg2.loop_gain,
+	 fll[f].cfg2.dithering ? "on": "off",
+	 fll[f].integ.state_int_part,fll[f].integ.state_fract_part
+	 );
+
+  return 0;
 }
-*/
