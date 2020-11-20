@@ -16,6 +16,9 @@ ifeq ($(TARGET), quicklogic-arnold)
   PLATFORM_FLAGS += -MP
 
   CXXFLAGS += $(PLATFORM_FLAGS)
+  ifeq ($(UART), uart)
+  CXXFLAGS += -DUSE_UART
+  endif
   CXXFLAGS += -DTF_LITE_MCU_DEBUG_LOG#							 Use this when platform does not have "standard IO fucntions"
 #  CXXFLAGS += -DTF_LITE_STRIP_ERROR_STRINGS
   CXXFLAGS += -DTF_LITE_USE_GLOBAL_CMATH_FUNCTIONS
@@ -50,6 +53,8 @@ ifeq ($(TARGET), quicklogic-arnold)
 	SRCS += tensorflow/lite/micro/quicklogic-arnold/programFPGA.cc
 	SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_conf.c
 	SRCS += tensorflow/lite/micro/quicklogic-arnold/rt_pad_conf.c
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/ni2c.c
+	SRCS += tensorflow/lite/micro/quicklogic-arnold/setup_camera.cc
 
   MICROLITE_CC_SRCS += $(SRCS)
 

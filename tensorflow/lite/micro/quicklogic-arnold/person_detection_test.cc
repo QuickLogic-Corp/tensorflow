@@ -1,4 +1,4 @@
-/* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+/*============================================================================
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,22 +27,40 @@ limitations under the License.
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/version.h"
 
+#define PULP_CHIP_STR arnold
+#include "fc_config.h"
+#define ARCHI_EU_ADDR 0x00020800
+#define ARCHI_EU_OFFSET 0x00000800
+#define ARCHI_DEMUX_ADDR 0x00024000
 #include "fll.h"
 #include "gpio.h"
+extern "C" {
+#include "hal/timer/timer_v2.h"
+#include "hal/eu/eu_v1.h"
+#include "pulp.h"
+int i2c_16read16 (char dev, int addr) ;  
+}
+
 #include "arnold_apb_ctl.h"
-#define USE_UART
-#undef USE_UART
 #include "apb_conv2d.h"
+#define USE_UART
 #ifdef USE_UART
+//#undef USE_UART   // remove this to use the uart to program the fpga
 #include "programFPGA.h"
 unsigned int __rt_iodev = 1;
-unsigned int __rt_iodev_uart_baudrate = 115200;
+unsigned int __rt_iodev_uart_baudrate = 460800;
 unsigned int __rt_iodev_uart_channel = 0;
+static rt_camera_t *camera;
 #endif
+
 bool fpga_programmed;
+bool camera_present;
 // Create an area of memory to use for input, output, and intermediate arrays.
 constexpr int tensor_arena_size = 93 * 1024;
 uint8_t tensor_arena[tensor_arena_size] __attribute__ ((aligned (16)));
+
+extern rt_camera_t *setup_camera();
+
 
 TF_LITE_MICRO_TESTS_BEGIN
 
@@ -51,29 +69,49 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   tflite::MicroErrorReporter micro_error_reporter;
   tflite::ErrorReporter* error_reporter = &micro_error_reporter;
 
-  //  printf("Attempted to program FLL0 %d Hz\n",prog_fll(0,28000,2));  // 456 MHz
-  //  printf("Attempted to program FLL1 %d Hz\n",prog_fll(1,6100,3));   //50 MHz
-  //  printf("Attempted to program FLL2 %d Hz\n",prog_fll(2,7400,3));  // 61 MHs
-
-  apb->padfunc0 = 0xaaa816aa;  // UART(7,8), gpio(5,6), fpga (0-4, 6, 19-15)
-  gpio->dir31_00 = gpio->dir31_00 | (3 << 5);  // gpio 5,6 output
-  gpio->enable31_00 = gpio->enable31_00 | (3 << 5); // gpio output enable
+  apb->padfunc0 = 0x000002aa;  // UART(7,8), gpio(5,6), fpga (0-4), camera(9-19)
+  gpio->dir31_00 = gpio->dir31_00 | (7 << 4);  // gpio 5,6,7 output
+  gpio->enable31_00 = gpio->enable31_00 | (7 << 4); // gpio output enable
   gpio->out31_00 = 0; // clear all gpio
 
   prog_fll(0,20000,2);  // 326 MHz  goto 456 in 2 steps/
   prog_fll(0,28000,2);  // 456 MHz
+  prog_fll(2,2950,3);  // 25 MHz -- 
   prog_fll(2,6100,3);  // 50 MHz
 
   
   apb->fpga_clk = 2;
   fpga_programmed = false;
+  camera_present = false;
 #ifdef USE_UART
-  programFPGA("tfl");
+  rt_uart_conf_t conf;
+  rt_event_alloc(NULL,4);
+  rt_uart_conf_init(&conf);
+  conf.itf = 0;
+  conf.baudrate = 460800;
+  rt_uart_t *uart = rt_uart_open (NULL,&conf, NULL);
+  if (uart== NULL) {
+    printf("Failed to open uart\n");
+    exit(0);
+  }
+  programFPGA(uart,"tfl");
   fpga_programmed = true;
-#endif
   apb->fpga_reset = 1;
   apb->fpga_reset = 0xF;
   apb->fpga_gate  = 0xFFFF;
+  efpga->i2c = 3;  // reset i2c bits
+  int chipid;
+
+  chipid = i2c_16read16((char)0x24,(int)0);
+  printf("Camera id = %04x\n",chipid);
+  if (chipid == 0x01b0)  // 0x1b0 == Himax sensor
+    camera_present = true;
+  if (camera_present) {
+    printf("calling setup_camera\n");
+    camera = setup_camera();
+    printf("calling setup_camera\n");
+  }
+#endif
   printf("Arnold GPIO 5,6= software, GPIO 0 = hardware\n");
 
   // Map the model into a usable data structure. This doesn't involve any
@@ -118,6 +156,22 @@ TF_LITE_MICRO_TEST(TestInvoke) {
 
   // Copy an image with a person into the memory area used for the input.
   const uint8_t* person_data = g_person_data;
+  // SHow us the picture
+#ifdef USE_UART
+  printf("ScReEn96 96\n");
+  for (int j = 0; j<96; j++) {
+      for (int k = 0; k < 96; k += 32) {
+	int l = 0;
+	printf("ImAgE %x %x",j,k);
+	while (l < 32) 
+	  printf(" %02x",person_data[j*96+k+(l++)]);
+	printf("\n");
+	for (int m=0; m < 20000; m++) asm volatile("nop");
+      }
+    }
+#endif
+    
+  
   for (int i = 0; i < input->bytes; ++i) {
     input->data.uint8[i] = person_data[i];
   }
@@ -151,6 +205,19 @@ TF_LITE_MICRO_TEST(TestInvoke) {
 
   // Now test with a different input, from an image without a person.
   const uint8_t* no_person_data = g_no_person_data;
+#ifdef USE_UART
+  for (int j = 0; j<96; j++) {
+      for (int k = 0; k < 96; k += 32) {
+	int l = 0;
+	printf("ImAgE %x %x",j,k);
+	while (l < 32) 
+	  printf(" %02x",no_person_data[j*96+k+(l++)]);
+	printf("\n");
+	for (int m=0; m < 20000; m++) asm volatile("nop");
+      }
+    }
+#endif
+
   for (int i = 0; i < input->bytes; ++i) {
     input->data.uint8[i] = no_person_data[i];
   }
@@ -184,6 +251,106 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   TF_LITE_MICRO_EXPECT_GT(no_person_score, person_score);
 
   TF_LITE_REPORT_ERROR(error_reporter, "Ran successfully\n");
+
+
+  #ifdef USE_UART
+
+  int display_on = 0;
+  char rx_buffer[20];   
+  rx_buffer[0] = 1;
+  while(camera_present) {
+    rt_event_t *event1 = rt_event_get_blocking(NULL);
+    rt_camera_capture (camera,tensor_arena, 324*244, event1);
+    rt_cam_control(camera,CMD_START, 0);
+    rt_event_wait(event1);
+    rt_cam_control(camera,CMD_STOP, 0);
+        if (rx_buffer[0] == 'V') {
+      display_on = 2;
+    }
+    if (rx_buffer[0] == 'C') {
+      display_on = 1;
+    }
+    if (rx_buffer[0] == 'c') {
+      display_on = -1;
+    }
+    else if (rx_buffer[0] == 'Q') {
+      printf("Exiting\n");
+      break;
+    }
+    if (rx_buffer[0] != 0) {
+      rx_buffer[0] = 0;
+      rt_event_t *event = rt_event_get_blocking(NULL);
+      rt_uart_read(uart, rx_buffer,1,event);
+    }
+
+    if (display_on == 2) {
+      printf("ScReEn320 320\n");
+      for (int j = 0; j<240; j++) {
+	for (int k = 0; k < 320; k += 32) {
+	  int l = 0;
+	  printf("ImAgE %x %x",j,k);
+	  while (l < 32) 
+	    printf(" %02x", tensor_arena[650+j*324+k+(l++)]);
+	  printf("\n");
+	  for (int m=0; m < 20000; m++) asm volatile("nop");
+	}
+      }
+      display_on = 0;
+    }
+
+    for (int i = 0; i < 96; ++i) {
+      for (int j = 0; j<96; j++)
+	input->data.uint8[i*96+j] = tensor_arena[74*324+i*324+144+j];
+  }
+
+  if (display_on) {
+    if (display_on > 0)
+      printf("ScReEn96 96\n");
+    for (int j = 0; j<96; j++) {
+      for (int k = 0; k < 96; k += 32) {
+	int l = 0;
+	printf("ImAgE %x %x",j,k);
+	while (l < 32) 
+	  printf(" %02x",input->data.uint8[j*96+k+(l++)]);
+	printf("\n");
+	for (int m=0; m < 20000; m++) asm volatile("nop");
+      }
+    }
+    display_on--;
+  }
+
+  // Run the model on this "No Person" input
+  gpio->out31_00 = (1<<6);
+  invoke_status = interpreter.Invoke();
+  gpio->out31_00 = 0;
+  if (invoke_status != kTfLiteOk) {
+    TF_LITE_REPORT_ERROR(error_reporter, "Invoke failed\n");
+  }
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteOk, invoke_status);
+
+  // Get the output from the model, and make sure it's the expected size and
+  // type.
+  output = interpreter.output(0);
+  TF_LITE_MICRO_EXPECT_EQ(4, output->dims->size);
+  TF_LITE_MICRO_EXPECT_EQ(1, output->dims->data[0]);
+  TF_LITE_MICRO_EXPECT_EQ(1, output->dims->data[1]);
+  TF_LITE_MICRO_EXPECT_EQ(1, output->dims->data[2]);
+  TF_LITE_MICRO_EXPECT_EQ(kCategoryCount, output->dims->data[3]);
+  TF_LITE_MICRO_EXPECT_EQ(kTfLiteUInt8, output->type);
+
+  // Make sure that the expected "No Person" score is higher.
+  person_score = output->data.uint8[kPersonIndex];
+  no_person_score = output->data.uint8[kNotAPersonIndex];
+  TF_LITE_REPORT_ERROR(
+      error_reporter,
+      "Himax Camera image.  person score: %d, no person score: %d\n", person_score,
+      no_person_score);
+  //  TF_LITE_MICRO_EXPECT_GT(no_person_score, person_score);
+
+  //  TF_LITE_REPORT_ERROR(error_reporter, "Ran successfully\n");
+  
+  }
+#endif  
 }
 
 TF_LITE_MICRO_TESTS_END

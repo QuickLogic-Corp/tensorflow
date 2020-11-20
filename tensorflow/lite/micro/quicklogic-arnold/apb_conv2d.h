@@ -21,7 +21,7 @@ typedef struct {
   volatile unsigned int debug_mux;    // 0x40
   volatile unsigned int clocks;    // 0x44
   volatile unsigned int quant;
-
+  volatile unsigned int i2c;
 } fpga_typedef ;
 
 #define FPGA_APB_BASE (0x1A200000)

@@ -30,6 +30,7 @@ limitations under the License.
 #include "tensorflow/lite/c/builtin_op_data.h"
 
 #include "accel.h"
+#include "arnold_apb_ctl.h"
 extern bool fpga_programmed;
 struct OpData {
   TfLitePaddingValues padding;
@@ -77,25 +78,25 @@ namespace tflite {
         // Get shape of filter and process iff it is accelerator compatible
         int itensor = node->inputs->data[1];
         TfLiteTensor* filter = &context->tensors[itensor];
-	printf("Considering tensor[%d], node[%d] for accel...", itensor, i);
+	//       	printf("Considering tensor[%d], node[%d] for accel...", itensor, i);
         if (filter->dims->size != 4) {
-          printf("skipping because filter not 4D\n");
+	  //          printf("skipping because filter not 4D\n");
           break;
         }
         if (filter->dims->data[1] != 1 || filter->dims->data[2] != 1) {
-          printf("Skipping because filter not 1x1xC\n");
+	  //          printf("Skipping because filter not 1x1xC\n");
           break;
         }
         if ((filter->dims->data[0] & 0x7) != 0) {
-          printf("Skipping because number of filters not a multiple of 8\n");
+	  //          printf("Skipping because number of filters not a multiple of 8\n");
           break;
         }
         if (simd * filter->dims->data[3] > scratch_size) {
-          printf("Skipping because scratch area is too small\n");
+	  //          printf("Skipping because scratch area is too small\n");
           break;
         }
         
-        printf("converting\n");
+	//        printf("converting\n");
         // HACK -- Set custom_initial_data_size non-zero to indicate prepared for Accel
 	if ( fpga_programmed) // only accelerate if fpga is programmmed
 	node->custom_initial_data_size = accel_fpga; // | accel_print;
@@ -520,7 +521,6 @@ TfLiteStatus MicroInterpreter::Invoke() {
                          "Invoke() called after initialization failed\n");
     return kTfLiteError;
   }
-
   // Ensure tensors are allocated before the interpreter is invoked to avoid
   // difficult to debug segfaults.
   if (!tensors_allocated_) {
@@ -566,10 +566,10 @@ TfLiteStatus MicroInterpreter::Invoke() {
       ScopedOperatorProfile scoped_profiler(
           profiler, OpNameFromRegistration(registration), i);
 #endif
-      // printf("invoking\n");
-      // printf("int32_t axNode%dTensor%d[] = {\n", i, node->outputs->data[0]);
+      //       printf("invoking\n");
+      //       printf("int32_t axNode%dTensor%d[] = {\n", i, node->outputs->data[0]);
       invoke_status = registration->invoke(&context_, node);
-      // printf("}\n");
+      //       printf("}\n");
       // Cleanup
       context_.tensors[node->inputs->data[0]].type &= 0xFF;
 

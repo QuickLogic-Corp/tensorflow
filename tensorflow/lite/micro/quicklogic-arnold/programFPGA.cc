@@ -1,17 +1,21 @@
+
 #define PULP_CHIP_STR arnold
 #include "fc_config.h"
 #define ARCHI_EU_ADDR 0x00020800
 #define ARCHI_EU_OFFSET 0x00000800
 #define ARCHI_DEMUX_ADDR 0x00024000
+
 extern "C" {
 #include "hal/timer/timer_v2.h"
 #include "hal/eu/eu_v1.h"
 #include "pulp.h"
+#include <rt/rt_api.h>
 }
+
 #include "programFPGA.h"
 #include "apb_fcb.h"
 //#include "fourbyte.h"
-void programFPGA (const char *design)
+void programFPGA (rt_uart_t *uart, const char *design)
 {
 
     int bit_line_count  = 172; // 0x00ac
@@ -55,21 +59,12 @@ void programFPGA (const char *design)
     // wait 20 us for internal reset to ArcticPro 2 to clear eFPGA
     for(i = 0; i<2800; i++) asm volatile("nop");
 
-
+    printf("Loading FPGA\n");
     {
-      extern int __rt_nb_devices;
+
       char rx_buffer[20];
+      for (i = 0; i < 20; rx_buffer[i++] = 0);
       sprintf(rx_buffer,"LoAd %s\n",design);
-      rt_event_alloc(NULL,4);
-      rt_uart_conf_t conf;
-      rt_uart_conf_init(&conf);
-      conf.itf = 0;
-      conf.baudrate = 115200;
-      rt_uart_t *uart = rt_uart_open (NULL,&conf, NULL);
-      if (uart== NULL) {
-            printf("Failed to open uart\n");
-	    exit(0);
-      } else {
       rt_event_t *event = rt_event_get_blocking(NULL);
       rt_uart_write(uart,rx_buffer, sizeof(rx_buffer), NULL);
       int count = 0;
@@ -81,8 +76,8 @@ void programFPGA (const char *design)
 		  (rx_buffer[2] << 16) | (rx_buffer[3] << 24);
 	count++;
       }
-      }
     }
+    printf("FPGA done\n");
     FCBAPB_FB_CFG_DONE = 1; // in APB mode, this needs to be explicitly written at end of configuration
 
 
