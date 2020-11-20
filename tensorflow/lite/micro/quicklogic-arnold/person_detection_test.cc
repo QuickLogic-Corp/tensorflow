@@ -44,8 +44,8 @@ int i2c_16read16 (char dev, int addr) ;
 #include "arnold_apb_ctl.h"
 #include "apb_conv2d.h"
 #define USE_UART
-#ifdef USE_UART
 #undef USE_UART   // remove this to use the uart to program the fpga
+#ifdef USE_UART
 #include "programFPGA.h"
 unsigned int __rt_iodev = 1;
 unsigned int __rt_iodev_uart_baudrate = 460800;
@@ -79,7 +79,6 @@ TF_LITE_MICRO_TEST(TestInvoke) {
   prog_fll(2,2950,3);  // 25 MHz -- 
   prog_fll(2,6100,3);  // 50 MHz
 
-  
   apb->fpga_clk = 2;
   fpga_programmed = false;
   camera_present = false;
