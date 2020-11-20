@@ -45,7 +45,7 @@ int i2c_16read16 (char dev, int addr) ;
 #include "apb_conv2d.h"
 #define USE_UART
 #ifdef USE_UART
-//#undef USE_UART   // remove this to use the uart to program the fpga
+#undef USE_UART   // remove this to use the uart to program the fpga
 #include "programFPGA.h"
 unsigned int __rt_iodev = 1;
 unsigned int __rt_iodev_uart_baudrate = 460800;
